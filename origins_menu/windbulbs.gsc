@@ -15,18 +15,23 @@
 ##############################################################################*/
 // Windstart, further on: Ice completed, the Wind staff crafted and in hand, the
 // Crazy Place rings solved, and the overground smoke puzzle ahead, with each smoke
-// already blown into place or not. The player starts outside the Wind portal, or
-// comes running out of it (the old Wind Smoke Practice of
-// various_origins_practice.gsc).
+// already blown into place or not. The player starts at the mound, comes running
+// out of the Wind portal (portal enter) or stands in the Crazy Place about to
+// leave through its exit (exit portal). The old Wind Smoke Practice of
+// various_origins_practice.gsc.
 
 // Where the player waits, frozen, while the setup runs: the excavation floor.
 #define BULBS_HOLD_ORIGIN  (-118.34, 157.932, -751.875)
 #define BULBS_HOLD_ANGLES  (13.902, 129.183, 0)
-// Outside the portal, by the mound.
-#define BULBS_OUTSIDE_ORIGIN  (386, -912, 73)
-#define BULBS_OUTSIDE_ANGLES  (0, 180, 0)
-#define BULBS_SPAWN_OUTSIDE   0
-#define BULBS_SPAWN_PORTAL    1
+// The mound start, outside the portal.
+#define BULBS_MOUND_ORIGIN  (386, -912, 73)
+#define BULBS_MOUND_ANGLES  (0, 180, 0)
+// The Wind Crazy Place exit.
+#define BULBS_EXIT_ORIGIN   (11234, -8687.25, -407.875)
+#define BULBS_EXIT_ANGLES   (0.0976524, 302.888, 0)
+#define BULBS_SPAWN_MOUND         0
+#define BULBS_SPAWN_PORTAL_ENTER  1
+#define BULBS_SPAWN_EXIT_PORTAL   2
 
 windbulbs_initialize()
 {
@@ -52,8 +57,8 @@ windbulbs_segment()
     segment.round_zombies = windbulbs_zombies();
     segment.staffs = array(ICE);
     segment.gems = array(ICE, FIRE, WIND);
-    segment.spots = shared_start_spots(BULBS_HOLD_ORIGIN, BULBS_HOLD_ANGLES, BULBS_HOLD_ORIGIN, BULBS_HOLD_ANGLES);
-    segment.use_exit = false;
+    segment.spots = shared_start_spots(BULBS_HOLD_ORIGIN, BULBS_HOLD_ANGLES, BULBS_EXIT_ORIGIN, BULBS_EXIT_ANGLES);
+    segment.use_exit = get_cfg_int("bulbs_spawn") == BULBS_SPAWN_EXIT_PORTAL;
     segment.setup = ::windbulbs_setup;
     segment.place_player = ::windbulbs_place_player;
     return segment;
@@ -62,7 +67,7 @@ windbulbs_segment()
 windbulbs_setup()
 {
     self shared_staff_setup_start();
-    self shared_portals_begin(WIND, false, false); // Opens while the rest of the setup runs.
+    self shared_portals_begin(WIND, level.segment.use_exit, false); // Opens while the rest of the setup runs.
     self shared_complete_staff(ICE, 0);
 
     // The Wind staff, crafted and taken the way shared_complete_staff does it.
@@ -73,7 +78,22 @@ windbulbs_setup()
 
     self windbulbs_solve_rings();
     self windbulbs_solve_smokes();
+    self windbulbs_align_discs();
     self shared_portals_wait();
+}
+
+// The crypt discs are turned to the Wind gem, whichever start location, as they
+// stand when the Wind orb is ready to go up. The orb scramble of the Ice staff has
+// long finished, and the lights are refreshed at the release (shared_refresh_disc_lights).
+windbulbs_align_discs()
+{
+    flag_waitopen("disc_rotation_active");
+    position = maps\mp\zm_tomb_quest_crypt::chamber_disc_get_gem_position("crypt_gem_air");
+    discs = getentarray("crypt_puzzle_disc", "script_noteworthy");
+    foreach(disc in discs)
+        if(disc.targetname != "crypt_puzzle_disc_main") disc.position = position;
+    shared_set_discs_silent(discs);
+    level notify("crypt_disc_rotation");
 }
 
 // Crazy Place: each ceiling ring one turn short of solved, turned with the native
@@ -110,12 +130,18 @@ windbulbs_solve_smokes()
 // Called by the held start when the setup is done, before the player is released.
 windbulbs_place_player()
 {
-    if(get_cfg_int("bulbs_spawn") == BULBS_SPAWN_PORTAL)
-        maps\mp\zm_tomb_teleporter::stargate_teleport_player("air_teleport_return", self);
-    else
+    switch(get_cfg_int("bulbs_spawn"))
     {
-        self setorigin(BULBS_OUTSIDE_ORIGIN);
-        self setplayerangles(BULBS_OUTSIDE_ANGLES);
+        case BULBS_SPAWN_PORTAL_ENTER:
+            maps\mp\zm_tomb_teleporter::stargate_teleport_player("air_teleport_return", self);
+            break;
+        case BULBS_SPAWN_EXIT_PORTAL:
+            self shared_teleport_to_start(level.segment.spots, true);
+            break;
+        default:
+            self setorigin(BULBS_MOUND_ORIGIN);
+            self setplayerangles(BULBS_MOUND_ANGLES);
+            break;
     }
 }
 
@@ -148,7 +174,7 @@ windbulbs_next_zombies()
 windbulbs_build_menu(root)
 {
     settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
-        add_cfg_choice(settings, "Start Location", "bulbs_spawn", array("Outside portal", "Out of portal"));
+        add_cfg_choice(settings, "Start Location", "bulbs_spawn", array("Mound", "Portal enter", "Exit portal"));
         create_option(settings, "Round: ^3" + get_cfg_int("bulbs_round"), ::cfg_increment_int, "bulbs_round", array(11, 12));
         create_option(settings, "Zombies: ^3" + windbulbs_zombies() + " ^7(" + windbulbs_zombies_max() + ")", ::windbulbs_next_zombies);
         add_cfg_choice(settings, "STG acquired", "stg_start", array("no", "yes", "papped"));
@@ -167,7 +193,7 @@ windbulbs_default_cfg()
 {
     settings_ar = [];
 
-    settings_ar["bulbs_spawn"] = BULBS_SPAWN_PORTAL;
+    settings_ar["bulbs_spawn"] = BULBS_SPAWN_PORTAL_ENTER;
     settings_ar["bulbs_round"] = 12;
     settings_ar["bulbs_zombies"] = 20; // Zombies left in the round.
     settings_ar["bulbs_smoke_1"] = 0;
