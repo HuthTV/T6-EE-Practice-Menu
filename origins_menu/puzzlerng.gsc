@@ -10,9 +10,9 @@
 ##############################################################################*/
 // Settings that force the random parts of the staff puzzles. Each puzzle's RNG is
 // offered by the modes that still have it ahead:
-//   Ice code       Fullgame, Icestart
-//   Wind rings     Fullgame, Icestart, Windstart
-//   Fire torches   Fullgame, Icestart, Windstart, Firestart
+//   Ice code       Fullgame, Icestart, Ice code start
+//   Wind rings     Fullgame, Icestart, Ice code start, Windstart
+//   Fire torches   Fullgame, Icestart, Ice code start, Windstart, Firestart
 //   Crazy Place walls   Fullgame and every segment start
 // A mode calls puzzle_rng_install and puzzle_rng_defaults while it loads, and its
 // menu calls puzzle_rng_build_menus (Fullgame, inside its Randomness menu) or
@@ -21,16 +21,23 @@
 
 puzzle_rng_has(puzzle)
 {
+    // Ice code start is Icestart a little further on: the same puzzles are ahead.
+    if(level.gamemode == "icecodestart") return puzzle_rng_has_mode(puzzle, "icestart");
+    return puzzle_rng_has_mode(puzzle, level.gamemode);
+}
+
+puzzle_rng_has_mode(puzzle, gamemode)
+{
     switch(puzzle)
     {
         case "ice":
-            return level.gamemode == "fullgame" || level.gamemode == "icestart";
+            return gamemode == "fullgame" || gamemode == "icestart";
         case "wind":
-            return level.gamemode == "fullgame" || level.gamemode == "icestart" || level.gamemode == "windstart";
+            return gamemode == "fullgame" || gamemode == "icestart" || gamemode == "windstart";
         case "fire":
-            return level.gamemode == "fullgame" || level.gamemode == "icestart" || level.gamemode == "windstart" || level.gamemode == "firestart";
+            return gamemode == "fullgame" || gamemode == "icestart" || gamemode == "windstart" || gamemode == "firestart";
         case "chamber":
-            return level.gamemode == "fullgame" || level.gamemode == "icestart" || level.gamemode == "windstart" || level.gamemode == "firestart" || level.gamemode == "lightningstart";
+            return gamemode == "fullgame" || gamemode == "icestart" || gamemode == "windstart" || gamemode == "firestart" || gamemode == "lightningstart";
     }
     return false;
 }

@@ -487,14 +487,14 @@ shared_chamber_discs_randomize() // OVERRIDE: maps\mp\zm_tomb_quest_crypt::chamb
 
 // Which crypt gem the opening shortcut lines the dials up with at this scramble,
 // or undefined to scramble normally.
-//   Ice:  the mound opening (scramble 1) -> blue.
+//   Ice:  the mound opening (scramble 1) -> blue (Icestart and Ice code start).
 //   Wind: the setup Ice orb (scramble 2) -> yellow, only for the Craft start.
 //   Fire: the setup Wind orb (scramble 3) -> red, only for the Craft start.
 //   Lightning: the setup Fire orb (scramble 4) -> purple, only for the Craft start.
 //         Exit starts keep the normal scramble.
 shared_disc_shortcut_gem()
 {
-    if(level.gamemode == "icestart" && level.n_disc_scrambles == 1)
+    if((level.gamemode == "icestart" || level.gamemode == "icecodestart") && level.n_disc_scrambles == 1)
         return "crypt_gem_ice";
     if(level.gamemode == "windstart" && level.n_disc_scrambles == 2 && get_cfg_int("wind_spawn") != 1)
         return "crypt_gem_air";
@@ -630,7 +630,8 @@ shared_box_reward_state(name, consumed)
                               Hud timer
 ##############################################################################*/
 // Splits run from start_split to Freedom; each case falls through to the next.
-// Without clock_start the run clock (level.game_start_time) is already running.
+// Without clock_start the run clock (level.game_start_time) is already running
+// and the segment timer starts now.
 // With it, the clock starts at the first split: clock_start sets
 // level.game_start_time for the checkpoint, then the running row appears.
 shared_segment_timer(start_split, clock_start)
@@ -653,7 +654,12 @@ shared_segment_timer(start_split, clock_start)
     timer_segment_hud(level.timer["segment"]);
     level thread shared_segment_end();
 
-    if(!isdefined(clock_start)) level thread shared_segment_running();
+    if(!isdefined(clock_start))
+    {
+        level thread shared_segment_running();
+        level.segment_start_time = gettime();
+        level.timer["segment"] settimerup(0);
+    }
 
     // Ending start: every staff is already crafted, so the run clock starts now
     // and the only row is the live Freedom one.
@@ -876,7 +882,8 @@ shared_get_parts()
     plinth = getent("crystal_plinth4", "targetname");
     while(!isDefined(plinth.v_staff)) wait 0.05;
 
-    icestart = level.gamemode == "icestart";
+    // Icestart and Ice code start set the plane and R2L parts.
+    icestart = level.gamemode == "icestart" || level.gamemode == "icecodestart";
 
 	self maps\mp\zombies\_zm_craftables::player_get_craftable_piece("elemental_staff_air", "upper_staff");
 	self maps\mp\zombies\_zm_craftables::player_get_craftable_piece("elemental_staff_air", "middle_staff");
@@ -1874,6 +1881,7 @@ shared_item_collected(key)
 // facts). Location defaults (shared_segment_item_defaults) collect every disc and
 // Maxis part; the player sets one to a spot to leave it out.
 //   Icestart        Purple Disc, plane, R2L part, Maxis Body, Maxis Engine
+//   Ice code start  as Icestart
 //   Windstart       Maxis Body, Maxis Engine, Maxis Drone crafted
 //   Firestart       Maxis Body, Maxis Engine, Maxis Drone crafted
 //   Lightningstart  Maxis Engine, Maxis Drone crafted
@@ -1887,6 +1895,7 @@ shared_drone_option()
         case "firestart":
         case "lightningstart":
         case "endingprac":
+        case "hundredkills":
             return true;
         default:
             return false;
@@ -2460,6 +2469,8 @@ shared_segment()
     segment.tablet = ::shared_tablet_cleaned;
     segment.score = 6500;                   // points on release
     segment.clock_start = ::shared_craft_time_start_clock; // starts the run clock (shared_segment_timer)
+    segment.clock_at_release = false;       // true: clock_start runs at release, not at the first split (its staff is crafted already)
+    segment.round_kills = undefined;        // instead of round_zombies: zombies of the round already killed
     segment.place_player = undefined;       // optional: the player's one move, just before release (held start)
     segment.early_teleport = false;         // true: move to the start spot at spawn (a Panzer waits for them in the Crazy Place)
     segment.on_spawn = ::shared_hold_at_start;
@@ -2563,7 +2574,15 @@ shared_held_start_install()
 
 shared_held_start_round()
 {
-    shared_set_round(level.segment.round, level.segment.round_zombies);
+    zombies = level.segment.round_zombies;
+    // The round's size depends on the player count, so it is counted once the
+    // player is in (still before the first round starts).
+    if(isdefined(level.segment.round_kills))
+    {
+        flag_wait("initial_players_connected");
+        zombies = practice_round_zombie_count(level.segment.round) - level.segment.round_kills;
+    }
+    shared_set_round(level.segment.round, zombies);
     // Spawning resumes when the player is released; release waits for this so
     // the clear cannot land after spawning was turned back on.
     flag_clear("spawn_zombies");
@@ -2625,7 +2644,13 @@ shared_held_start()
     self.score = level.segment.score;
 
     flag_set("spawn_zombies");
-    level thread shared_segment_timer(level.segment.split, level.segment.clock_start);
+    clock_start = level.segment.clock_start;
+    if(level.segment.clock_at_release)
+    {
+        [[ clock_start ]]();
+        clock_start = undefined; // shared_segment_timer: the clock is running.
+    }
+    level thread shared_segment_timer(level.segment.split, clock_start);
     level.segment_setup_running = undefined; // An open Crazy Place exit starts its 20 seconds.
     flag_set("segment_ready");
     if(get_cfg_int("cycle_tracker")) level thread shared_cycle_tracker();

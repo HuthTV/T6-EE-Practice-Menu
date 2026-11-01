@@ -185,16 +185,19 @@ give_gem(staff_id)
     self maps\mp\zombies\_zm_craftables::player_take_piece(piece);
 }
 
-// Ice, Wind, Fire and Lightning Start: the modes that call shared_segment_replacefuncs.
+// Ice, Wind, Fire and Lightning Start and the starts built on them: the modes that
+// call shared_segment_replacefuncs.
 mode_is_segment_start()
 {
     switch(level.gamemode)
     {
         case "icestart":
+        case "icecodestart":
         case "windstart":
         case "firestart":
         case "lightningstart":
         case "endingprac":
+        case "hundredkills":
         case "windbulbs":
             return true;
         default:

@@ -15,7 +15,8 @@
 #include scripts\zm\origins_menu\firestart;
 #include scripts\zm\origins_menu\fullgame;
 #include scripts\zm\origins_menu\genprac;
-#include scripts\zm\origins_menu\icecode;
+#include scripts\zm\origins_menu\hundredkills;
+#include scripts\zm\origins_menu\icecodestart;
 #include scripts\zm\origins_menu\icestart;
 #include scripts\zm\origins_menu\lightningstart;
 #include scripts\zm\origins_menu\origins;
@@ -39,13 +40,13 @@ register_modes()
 	mode_timer(register_mode("firestart",      "Firestart",       ::firestart_initialize,      ::firestart_run,      ::shared_build_segment_menus), true, SPLIT_FIRE);
 	mode_timer(register_mode("lightningstart", "Lightningstart",  ::lightningstart_initialize, ::lightningstart_run, ::shared_build_segment_menus), true, SPLIT_LIGHTNING);
 	mode_timer(register_mode("endingprac",     "Ending prac",     ::endingprac_initialize,     ::endingprac_run,     ::endingprac_build_menu), true, SPLIT_FREEDOM);
+	mode_timer(register_mode("hundredkills",   "100 Kills",       ::hundredkills_initialize,   ::hundredkills_run,   ::hundredkills_build_menu), true, SPLIT_FREEDOM);
 	register_mode("panzprac",       "Panzer Practice", ::panzprac_initialize,       ::panzprac_run,       ::panzprac_build_menu);
 	register_mode("genprac",        "Gen Practice",    ::genprac_initialize,        ::genprac_run,        ::genprac_build_menu);
-	register_mode("icecode",        "Ice code",        ::icecode_initialize,        ::icecode_run,        ::icecode_build_menu);
+	mode_timer(register_mode("icecodestart",   "Ice code start",  ::icecodestart_initialize,   ::icecodestart_run,   ::icecodestart_build_menu), true, SPLIT_WIND);
 	// Placeholders: listed in the menu but not selectable until implemented.
 	register_mode("windcode",       "Wind Code");
 	register_mode("firecode",       "Fire Code");
-	register_mode("raisehellprac",  "Raise hell prac");
 
 	// Template for new modes (origins_menu\examplemode.gsc); uncomment it and its
 	// #include to try it.
