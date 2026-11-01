@@ -2,7 +2,7 @@
 #include common_scripts\utility;
 #include maps\mp\zombies\_zm_utility;
 
-#include scripts\zm\practice_core\menu_utility;
+#include scripts\zm\utility_core\menu_utility;
 #inline scripts\zm\dierise_menu\dierise;
 
 /*##############################################################################

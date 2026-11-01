@@ -4,8 +4,8 @@
 #include maps\mp\gametypes_zm\_hud_util;
 #include maps\mp\gametypes_zm\_hud_message;
 
-#include scripts\zm\practice_core\menu_base;
-#include scripts\zm\practice_core\menu_utility;
+#include scripts\zm\utility_core\menu_base;
+#include scripts\zm\utility_core\menu_utility;
 #inline scripts\zm\origins_menu\oprac;
 
 icecode_initialize()

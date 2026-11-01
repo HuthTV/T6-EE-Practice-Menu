@@ -2,8 +2,8 @@
 #include common_scripts\utility;
 #include maps\mp\zombies\_zm_utility;
 
-#include scripts\zm\practice_core\basegame;
-#include scripts\zm\practice_core\menu_utility;
+#include scripts\zm\utility_core\basegame;
+#include scripts\zm\utility_core\menu_utility;
 #include scripts\zm\mob_menu\freeroam;
 #include scripts\zm\mob_menu\mob;
 #include scripts\zm\mob_menu\mobfullgame;

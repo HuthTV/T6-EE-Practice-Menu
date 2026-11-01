@@ -2,8 +2,8 @@
 #include common_scripts\utility;
 #include maps\mp\zombies\_zm_utility;
 
-#include scripts\zm\practice_core\menu_base;
-#include scripts\zm\practice_core\menu_utility;
+#include scripts\zm\utility_core\menu_base;
+#include scripts\zm\utility_core\menu_utility;
 #inline scripts\zm\origins_menu\oprac;
 
 /*##############################################################################
@@ -21,8 +21,8 @@
 //      to zm_tomb\o-prac-menu.gsc:
 //          register_mode("mymode", "My Mode", ::mymode_initialize, ::mymode_run, ::mymode_build_menu);
 //      The last argument gives it menu options; omit it for none.
-//   3. build_single.bat -Check checks it (including any missing #include);
-//      build_single.bat -Source installs it to try.
+//   3. build.py -check checks it (including any missing #include);
+//      build.py -deploy -source installs it to try.
 // Mob of the Dead modes work the same way, in mob_menu\ and zm_prison\m-prac-menu.gsc.
 
 // Runs while the map loads, before players spawn: load the mode's settings and

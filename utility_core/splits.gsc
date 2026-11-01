@@ -3,8 +3,8 @@
 #include maps\mp\zombies\_zm_utility;
 #include maps\mp\gametypes_zm\_hud_util;
 
-#include scripts\zm\practice_core\menu_base;
-#include scripts\zm\practice_core\menu_utility;
+#include scripts\zm\utility_core\menu_base;
+#include scripts\zm\utility_core\menu_utility;
 
 /*##############################################################################
                               Split timer

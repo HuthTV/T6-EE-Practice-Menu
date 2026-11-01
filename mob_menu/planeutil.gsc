@@ -2,11 +2,11 @@
 #include common_scripts\utility;
 #include maps\mp\zombies\_zm_utility;
 
-#include scripts\zm\practice_core\basegame;
-#include scripts\zm\practice_core\menu_base;
-#include scripts\zm\practice_core\menu_utility;
-#include scripts\zm\practice_core\rounds;
-#include scripts\zm\practice_core\splits;
+#include scripts\zm\utility_core\basegame;
+#include scripts\zm\utility_core\menu_base;
+#include scripts\zm\utility_core\menu_utility;
+#include scripts\zm\utility_core\rounds;
+#include scripts\zm\utility_core\splits;
 #include scripts\zm\mob_menu\mob;
 #include scripts\zm\mob_menu\mobsplits;
 #inline scripts\zm\mob_menu\mob;

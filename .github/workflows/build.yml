@@ -32,8 +32,8 @@ jobs:
           Expand-Archive gsc-tool-download\windows-x64-release.zip -DestinationPath bin -Force
 
       - name: Build
-        shell: powershell
-        run: .\build.ps1 -Check
+        shell: pwsh
+        run: python build.py -check
 
       - uses: actions/upload-artifact@v4
         with:

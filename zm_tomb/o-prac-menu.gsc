@@ -9,8 +9,8 @@
 #include maps\mp\zm_tomb_craftables;
 #include maps\mp\zombies\_zm_craftables;
 
-#include scripts\zm\practice_core\basegame;
-#include scripts\zm\practice_core\menu_utility;
+#include scripts\zm\utility_core\basegame;
+#include scripts\zm\utility_core\menu_utility;
 #include scripts\zm\origins_menu\firestart;
 #include scripts\zm\origins_menu\fullgame;
 #include scripts\zm\origins_menu\genprac;

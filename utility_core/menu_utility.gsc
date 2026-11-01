@@ -5,8 +5,8 @@
 #include maps\mp\gametypes_zm\_hud_message;
 #include maps\mp\zombies\_zm_weapons;
 
-#include scripts\zm\practice_core\basegame;
-#include scripts\zm\practice_core\menu_base;
+#include scripts\zm\utility_core\basegame;
+#include scripts\zm\utility_core\menu_base;
 
 getCFG( string )
 {

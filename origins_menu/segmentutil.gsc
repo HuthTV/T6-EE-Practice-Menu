@@ -4,10 +4,10 @@
 #include maps\mp\zm_tomb_utility;
 #include maps\mp\gametypes_zm\_hud_util;
 
-#include scripts\zm\practice_core\basegame;
-#include scripts\zm\practice_core\menu_base;
-#include scripts\zm\practice_core\menu_utility;
-#include scripts\zm\practice_core\rounds;
+#include scripts\zm\utility_core\basegame;
+#include scripts\zm\utility_core\menu_base;
+#include scripts\zm\utility_core\menu_utility;
+#include scripts\zm\utility_core\rounds;
 #include scripts\zm\origins_menu\origins;
 #include scripts\zm\origins_menu\staffutil;
 #include scripts\zm\origins_menu\puzzlerng;

@@ -3,16 +3,16 @@
 #include maps\mp\zombies\_zm_utility;
 #include maps\mp\gametypes_zm\_hud_util;
 
-#include scripts\zm\practice_core\basegame;
-#include scripts\zm\practice_core\menu_base;
-#include scripts\zm\practice_core\menu_utility;
+#include scripts\zm\utility_core\basegame;
+#include scripts\zm\utility_core\menu_base;
+#include scripts\zm\utility_core\menu_utility;
 #inline scripts\zm\mob_menu\mob;
 
 /*##############################################################################
                               Mob of the Dead map hooks
 ##############################################################################*/
 // Everything Mob adds to the core menus and HUD (see practice_map in
-// practice_core\basegame.gsc). Ported from the old M-Practice beta V2.1
+// utility_core\basegame.gsc). Ported from the old M-Practice beta V2.1
 // (old-mob-practice), whose settings were dvars that reset on game restart;
 // here they are saved in M_PRAC/ (older builds used MPRAC/).
 mob_practice_map()

@@ -3,9 +3,9 @@
 #include maps\mp\zombies\_zm_utility;
 #include maps\mp\gametypes_zm\_hud_util;
 
-#include scripts\zm\practice_core\basegame;
-#include scripts\zm\practice_core\menu_base;
-#include scripts\zm\practice_core\menu_utility;
+#include scripts\zm\utility_core\basegame;
+#include scripts\zm\utility_core\menu_base;
+#include scripts\zm\utility_core\menu_utility;
 #include scripts\zm\origins_menu\segmentutil;
 #inline scripts\zm\origins_menu\oprac;
 
@@ -13,7 +13,7 @@
                               Origins map hooks
 ##############################################################################*/
 // Everything Origins adds to the core menus and HUD (see practice_map in
-// practice_core\basegame.gsc). Settings are saved in O_PRAC/ since 2026-10-25;
+// utility_core\basegame.gsc). Settings are saved in O_PRAC/ since 2026-10-25;
 // older builds keep theirs in OPRAC/, so either can be installed. The keys and
 // mode dvar are the ones O-Practice always used.
 shared_practice_map()

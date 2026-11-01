@@ -6,8 +6,8 @@
 #include maps\mp\zombies\_zm_powerups;
 #include maps\mp\zm_tomb_dig;
 
-#include scripts\zm\practice_core\menu_base;
-#include scripts\zm\practice_core\menu_utility;
+#include scripts\zm\utility_core\menu_base;
+#include scripts\zm\utility_core\menu_utility;
 #include scripts\zm\origins_menu\origins;
 #include scripts\zm\origins_menu\segmentutil;
 #include scripts\zm\origins_menu\puzzlerng;

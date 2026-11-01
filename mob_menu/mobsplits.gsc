@@ -2,7 +2,7 @@
 #include common_scripts\utility;
 #include maps\mp\zombies\_zm_utility;
 
-#include scripts\zm\practice_core\splits;
+#include scripts\zm\utility_core\splits;
 #inline scripts\zm\mob_menu\mob;
 
 /*##############################################################################

@@ -4,8 +4,8 @@
 #include maps\mp\gametypes_zm\_hud_util;
 #include maps\mp\gametypes_zm\_hud_message;
 
-#include scripts\zm\practice_core\basegame;
-#include scripts\zm\practice_core\menu_utility;
+#include scripts\zm\utility_core\basegame;
+#include scripts\zm\utility_core\menu_utility;
 
 /*##############################################################################
                               Menu panel layout

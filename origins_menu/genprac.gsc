@@ -6,8 +6,8 @@
 #include maps\mp\zombies\_zm_weap_beacon;
 #include maps\mp\zm_tomb_capture_zones;
 
-#include scripts\zm\practice_core\menu_base;
-#include scripts\zm\practice_core\menu_utility;
+#include scripts\zm\utility_core\menu_base;
+#include scripts\zm\utility_core\menu_utility;
 #inline scripts\zm\origins_menu\oprac;
 
 genprac_initialize()
