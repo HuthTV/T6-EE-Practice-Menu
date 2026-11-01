@@ -2619,6 +2619,7 @@ shared_held_start()
         self shared_teleport_to_start(level.segment.spots, level.segment.use_exit);
     setDvar("timescale", 1);
     wait 0.5; // Normal speed for 500 ms before anything is released.
+    level thread shared_refresh_disc_lights();
     if(isdefined(level.segment.place_player)) self [[ level.segment.place_player ]]();
 
     self.score = level.segment.score;
@@ -2648,6 +2649,17 @@ shared_panzer_flow(setup_start)
         shared_setup_trace("Panzer landed");
     }
     flag_set("segment_panzer_ready");
+}
+
+shared_refresh_disc_lights()
+{
+    discs = getentarray("crypt_puzzle_disc", "script_noteworthy");
+    for(pass = 0; pass < 2; pass++)
+    {
+        foreach(disc in discs)
+            disc maps\mp\zm_tomb_quest_crypt::bryce_cake_light_update(0);
+        wait 0.25;
+    }
 }
 
 shared_run_setup(setup)
