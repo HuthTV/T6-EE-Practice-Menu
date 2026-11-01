@@ -13,6 +13,7 @@
 genprac_initialize()
 {
     replacefunc( maps\mp\zm_tomb_capture_zones::recapture_round_start, ::genprac_recapture_round_start);
+    replacefunc( maps\mp\zm_tomb_capture_zones::get_progress_rate, ::genprac_get_progress_rate);
 	replacefunc( maps\mp\zombies\_zm_ai_mechz::mechz_spawning_logic, ::genprac_mechz_spawning_logic);
     replacefunc( maps\mp\zombies\_zm_weap_beacon::player_throw_beacon, ::genprac_player_throw_beacon);
     setDvar("basegame_oopa", 0);
@@ -80,7 +81,8 @@ on_player_spawned_gen()
         tped = 0;
         while(self fragbuttonpressed())
         {
-            if(tped == 0)
+            // Not while melee is held or the menu is open: melee + frag opens the menu.
+            if(tped == 0 && !self meleebuttonpressed() && !self menu_open())
             {
                 tped = 1;
                 self setOrigin( (-173, -20, 320) );
@@ -402,6 +404,38 @@ genprac_recapture_round_start()
     recapture_round_audio_ends();
     flag_clear( "recapture_event_in_progress" );
     flag_clear( "generator_under_attack" );
+}
+
+// Vanilla get_progress_rate, except the recapture zombies never drain the
+// generator: its progress stays full, so a wave killed fast does not have to wait
+// for the progress to refill before the next one comes. With no drain the progress
+// never changes during the attack, and capture_progress_think leaves its loop on
+// the first update after the zombies are gone (the progress-changed test compares
+// before the clamp to 100).
+genprac_get_progress_rate( n_players_in_zone, n_players_total )
+{
+    if ( flag( "recapture_event_in_progress" ) && self ent_flag( "current_recapture_target_zone" ) )
+    {
+        if ( self get_recapture_attacker_count() > 0 )
+            n_rate = 0; // MODIFIED: vanilla rate_recapture (negative).
+        else if ( !self ent_flag( "attacked_by_recapture_zombies" ) )
+            n_rate = 0;
+        else
+            n_rate = level.zone_capture.rate_recapture_players;
+    }
+    else if ( self ent_flag( "current_recapture_target_zone" ) )
+        n_rate = level.zone_capture.rate_recapture_players;
+    else if ( n_players_in_zone > 0 )
+    {
+        if ( isdefined( level.is_forever_solo_game ) && level.is_forever_solo_game )
+            n_rate = level.zone_capture.rate_capture_solo;
+        else
+            n_rate = level.zone_capture.rate_capture * ( n_players_in_zone / n_players_total );
+    }
+    else
+        n_rate = level.zone_capture.rate_decay;
+
+    return n_rate;
 }
 
 genprac_default_cfg()
