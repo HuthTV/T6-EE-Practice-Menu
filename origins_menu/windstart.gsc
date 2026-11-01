@@ -54,6 +54,7 @@ windstart_segment()
     segment.use_exit = get_cfg_int("wind_spawn") == 1;
     segment.panzer_spot = WIND_PANZER_SPOT;
     segment.panzer_spot_wave = 2; // Only Panzer 2, and only when it is due on the start round.
+    segment.early_teleport = segment.round == 12; // Round 12 may have the Panzer waiting.
     segment.setup = ::windstart_setup;
 
     return segment;
@@ -62,11 +63,12 @@ windstart_segment()
 windstart_setup()
 {
     self shared_staff_setup_start();
+    self shared_portals_begin(WIND, level.segment.use_exit, false);
     souls = get_cfg_int("ice_souls");
     if(souls > WIND_ICE_SOULS_MAX) souls = WIND_ICE_SOULS_MAX;
     self shared_complete_staff(ICE, souls);
     self shared_get_staff_pieces(WIND);
-    self shared_open_portals(WIND, level.segment.use_exit);
+    self shared_portals_wait();
 }
 
 windstart_default_cfg()

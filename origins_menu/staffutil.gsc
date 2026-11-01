@@ -30,6 +30,7 @@ shared_staff_install(staffs)
     replacefunc( maps\mp\zm_tomb_quest_crypt::init_crypt_gems, ::shared_init_crypt_gems);
     replacefunc( maps\mp\zm_tomb_main_quest::run_gramophone_teleporter, ::shared_run_gramophone_teleporter);
     replacefunc( maps\mp\zm_tomb_main_quest::staff_crystal_wait_for_teleport, ::shared_staff_crystal_wait_for_teleport);
+    replacefunc( maps\mp\zm_tomb_teleporter::run_chamber_exit, ::shared_run_chamber_exit);
 }
 
 // First step of a staff setup: the start's parts, mound open, Fire crystal showing.
@@ -41,6 +42,7 @@ shared_staff_setup_start()
     shared_setup_trace("waiting fire crystal");
     self shared_awaken_fire_crystal();
     shared_setup_trace("setup_start done");
+    self thread shared_start_puzzles();
 }
 
 // Scoreboard staff icons (quest_state: 2 crystal, 3 crafted, 4 upgraded). The last
@@ -58,9 +60,10 @@ shared_refresh_staff_icons()
 }
 
 // TEMP: traces the setup steps to the console to find where a start hangs.
+// The stamp is game milliseconds (real time is a tenth of that at timescale 10).
 shared_setup_trace(text)
 {
-    print("O-Prac trace: " + text + "\n");
+    print("O-Prac trace [" + gettime() + " ms]: " + text + "\n");
 }
 
 /*##############################################################################
@@ -80,13 +83,7 @@ shared_complete_staff(staff_id, num_souls)
     shared_setup_trace(staff.name + ": take");
     self shared_take_staff(staff.craftable, staff.weapname);
     shared_setup_trace(staff.name + ": puzzles");
-    switch(staff_id)
-    {
-        case ICE:       self shared_ice_puzzles(); break;
-        case WIND:      self shared_wind_puzzles(); break;
-        case FIRE:      self shared_fire_puzzles(); break;
-        case LIGHTNING: self shared_lightning_puzzles(); break;
-    }
+    while(!isDefined(level.setup_puzzles_done) || !isDefined(level.setup_puzzles_done[staff_id])) wait 0.05;
     shared_setup_trace(staff.name + ": orb");
     self shared_shoot_orb(staff_id);
     shared_setup_trace(staff.name + ": place");
@@ -139,14 +136,38 @@ shared_fill_souls(staff_id, num_souls)
 }
 
 // Opens the element's portal with the gramophone. open_exit: the matching Crazy
-// Place exit opens at the same time; both play the same opening animation at
-// timescale 10, so the exit is already open when the player is released.
-shared_open_portals(element, open_exit)
+// Place exit opens at the same time. Both play the same opening animation (about
+// 12 s), so a setup starts them early (shared_portals_begin) and waits for them as
+// its last step (shared_portals_wait). The exit then stays open until the player
+// is released (shared_run_chamber_exit). take_gram: the gramophone comes back in
+// hand once the portal is open (the Craft starts).
+shared_portals_begin(element, open_exit, take_gram)
+{
+    flag_clear("segment_portals_open");
+    self thread shared_portals_run(element, open_exit, take_gram);
+}
+
+shared_portals_run(element, open_exit, take_gram)
 {
     if(open_exit) self thread shared_open_exit_portal(element);
     shared_setup_trace("gramophone portal " + element);
     self shared_open_gramophone_portal(element);
+    if(open_exit) flag_wait("segment_exit_open");
+    if(take_gram) self shared_take_gramophone(element);
     shared_setup_trace("portals open");
+    flag_set("segment_portals_open");
+}
+
+shared_portals_wait()
+{
+    flag_wait("segment_portals_open");
+}
+
+// Both steps in one call, for a setup that has nothing to overlap them with.
+shared_open_portals(element, open_exit, take_gram = false)
+{
+    self shared_portals_begin(element, open_exit, take_gram);
+    self shared_portals_wait();
 }
 
 // Whether this mode's setup completes the staff (the list passed to
@@ -200,6 +221,31 @@ shared_take_staff(craftable, weapname)
     pickup delete();
     // Native ownership tracking clears availability in a separate thread.
     flag_waitopen(weapname + "_enabled");
+}
+
+// Every staff's two puzzles are independent of each other and of the crafting, so
+// they all start together once the mound is open. shared_complete_staff waits for
+// its staff's flag (the orb shot needs the puzzles done, and the discs it shares
+// are the reason the orbs themselves stay in order).
+shared_start_puzzles()
+{
+    level.setup_puzzles_done = [];
+    foreach(staff_id in level.segment_setup_staffs)
+        self thread shared_run_staff_puzzles(staff_id);
+}
+
+shared_run_staff_puzzles(staff_id)
+{
+    staff = shared_staff_names(staff_id);
+    switch(staff_id)
+    {
+        case ICE:       self shared_ice_puzzles(); break;
+        case WIND:      self shared_wind_puzzles(); break;
+        case FIRE:      self shared_fire_puzzles(); break;
+        case LIGHTNING: self shared_lightning_puzzles(); break;
+    }
+    shared_setup_trace(staff.name + ": puzzles done");
+    level.setup_puzzles_done[staff_id] = true;
 }
 
 shared_ice_puzzles()
@@ -368,6 +414,9 @@ shared_open_gramophone_portal(element)
         if(candidate.script_int == element) gram = candidate;
     shared_setup_trace("waiting gramophone has_vinyl");
     while(!gram.has_vinyl) wait 0.05;
+    // The mound opening takes the gramophone back a moment after the mound is
+    // open, and a placed one cannot be placed again.
+    while(flag("gramophone_placed")) wait 0.05;
     shared_setup_trace("placing gramophone");
     wait 0.1;
     gram.setup_trigger notify("trigger", self);
@@ -640,7 +689,86 @@ shared_open_exit_portal(element)
 {
     exit_trigger = level.a_teleport_exit_triggers[element];
     while(!isdefined(exit_trigger.trigger_stub)) wait 0.05;
-    wait 0.05; // Let run_chamber_exit reach its trigger wait.
+    flag_wait("start_zombie_round_logic"); // run_chamber_exit only listens after this.
+    wait 0.1; // Let run_chamber_exit reach its trigger wait.
     exit_trigger.trigger_stub notify("trigger", self);
+}
+
+// Vanilla run_chamber_exit. MODIFIED: once open, the exit stays open while a held
+// start's setup is still running (level.segment_setup_running), so it can open as
+// early as the other setup steps allow and the player is released the moment it
+// has finished opening. Its 20 seconds then start at the release.
+#using_animtree("fxanim_props_dlc4");
+
+shared_run_chamber_exit( n_enum ) // OVERRIDE: maps\mp\zm_tomb_teleporter::run_chamber_exit
+{
+    s_portal = level.a_teleport_exits[n_enum];
+    s_activate_pos = level.a_teleport_exit_triggers[n_enum];
+    e_portal_frame = level.a_portal_exit_frames[n_enum];
+    e_portal_frame show();
+    str_building_flag = e_portal_frame.targetname + "_building";
+    flag_init( str_building_flag );
+    s_activate_pos.trigger_stub = tomb_spawn_trigger_radius( s_activate_pos.origin, 50.0, 1 );
+    s_activate_pos.trigger_stub set_unitrigger_hint_string( &"ZM_TOMB_TELE" );
+    s_portal.target = s_activate_pos.target;
+    s_portal.origin = e_portal_frame gettagorigin( "fx_portal_jnt" );
+    s_portal.angles = e_portal_frame gettagangles( "fx_portal_jnt" );
+    s_portal.angles = ( s_portal.angles[0], s_portal.angles[1] + 180, s_portal.angles[2] );
+    str_fx = get_teleport_fx_from_enum( n_enum );
+    collapse_time = getanimlength( %fxanim_zom_tomb_portal_collapse_anim );
+    open_time = getanimlength( %fxanim_zom_tomb_portal_open_anim );
+    flag_wait( "start_zombie_round_logic" );
+
+    while ( true )
+    {
+        s_activate_pos.trigger_stub waittill( "trigger", e_player );
+
+        if ( !is_player_valid( e_player ) )
+            continue;
+
+        if ( e_player.score < level.teleport_cost )
+            continue;
+
+        s_activate_pos.trigger_stub set_unitrigger_hint_string( "" );
+        s_activate_pos.trigger_stub trigger_off();
+
+        if ( level.teleport_cost > 0 )
+            e_player maps\mp\zombies\_zm_score::minus_to_player_score( level.teleport_cost );
+
+        e_portal_frame playloopsound( "zmb_teleporter_loop_pre", 1 );
+        e_portal_frame setanim( %fxanim_zom_tomb_portal_open_anim, 1.0, 0.1, 1 );
+        flag_set( str_building_flag );
+        e_portal_frame thread whirlwind_rumble_nearby_players( str_building_flag );
+        wait( open_time );
+        e_portal_frame setanim( %fxanim_zom_tomb_portal_open_1frame_anim, 1.0, 0.1, 1 );
+        wait_network_frame();
+        flag_clear( str_building_flag );
+        e_fx = spawn( "script_model", s_portal.origin );
+        e_fx.angles = s_portal.angles;
+        e_fx setmodel( "tag_origin" );
+        e_fx setclientfield( "element_glow_fx", n_enum + 4 );
+        rumble_nearby_players( e_fx.origin, 1000, 2 );
+        e_portal_frame playloopsound( "zmb_teleporter_loop_post", 1 );
+        s_portal thread maps\mp\zm_tomb_teleporter::teleporter_radius_think();
+
+        //MODIFIED
+        if(isdefined(level.segment_setup_running))
+        {
+            flag_set( "segment_exit_open" );
+            while(isdefined(level.segment_setup_running)) wait 0.05;
+        }
+        //MODIFIED END
+
+        wait 20.0;
+        e_portal_frame setanim( %fxanim_zom_tomb_portal_collapse_anim, 1.0, 0.1, 1 );
+        e_portal_frame stoploopsound( 0.5 );
+        e_portal_frame playsound( "zmb_teleporter_anim_collapse_pew" );
+        s_portal notify( "teleporter_radius_stop" );
+        e_fx setclientfield( "element_glow_fx", 0 );
+        wait( collapse_time );
+        e_fx delete();
+        s_activate_pos.trigger_stub trigger_on();
+        s_activate_pos.trigger_stub set_unitrigger_hint_string( &"ZM_TOMB_TELE" );
+    }
 }
 

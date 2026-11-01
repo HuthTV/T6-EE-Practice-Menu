@@ -182,11 +182,15 @@ mob_plane_setup(segment)
     // (vanilla is_player_valid_afterlife).
     was_demigod = is_true(self.demigod);
     if(!was_demigod) self toggle_demigod();
+    // The loadout as soon as the player is a body again.
+    self mob_give_weapon("mp5k_zm");
+    foreach(perk in segment.perks)
+        if(!self hasperk(perk))
+            self maps\mp\zombies\_zm_perks::give_perk(perk, 0);
     mob_open_zombie_doors(array(DOOR_SPAWN_M14, DOOR_CAFE_TRAP, DOOR_CAFE_STAIRS, DOOR_DRYER, DOOR_CODES, DOOR_GEN_LEFT, DOOR_MP5_CATWALK, DOOR_CITADEL, DOOR_DOCKS_WOLF));
     self mob_complete_key_quest();
     self mob_open_key_locks();
     self mob_open_elevator();
-    self mob_give_weapon("mp5k_zm");
     self mob_get_plane_parts();
     if(segment.cycles > 0)
         self mob_complete_plane_cycles(segment.cycles);
@@ -194,9 +198,6 @@ mob_plane_setup(segment)
         self mob_build_plane_ready();
     if(segment.tomahawk)
         self mob_give_tomahawk();
-    foreach(perk in segment.perks)
-        if(!self hasperk(perk))
-            self maps\mp\zombies\_zm_perks::give_perk(perk, 0);
     self setorigin(ROOF_SPOT);
 
     while(level.round_number < segment.start_round)

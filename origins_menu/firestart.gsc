@@ -64,15 +64,15 @@ firestart_segment()
 firestart_setup()
 {
     self shared_staff_setup_start();
+    // Craft start: the gramophone comes back to the excavation in hand once the
+    // portal is open. The Exit start leaves it at the Wind tunnel portal.
+    self shared_portals_begin(WIND, level.segment.use_exit, !level.segment.use_exit);
     souls = get_cfg_int("ice_souls");
     if(souls > FIRE_ICE_SOULS_MAX) souls = FIRE_ICE_SOULS_MAX;
     self shared_complete_staff(ICE, souls);
     self shared_complete_staff(WIND, 0);
     self shared_get_staff_pieces(FIRE);
-    self shared_open_portals(WIND, level.segment.use_exit);
-    // Craft start: the gramophone comes back to the excavation in hand; the
-    // Exit start leaves it at the Wind tunnel portal.
-    if(!level.segment.use_exit) self shared_take_gramophone(WIND);
+    self shared_portals_wait();
 }
 
 firestart_default_cfg()

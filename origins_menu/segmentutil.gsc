@@ -155,7 +155,11 @@ shared_tank_movement() //OVERRIDE: maps\mp\zm_tomb_tank::tank_movement
             // 1 trip to bunkers. 2 trips to church.
             level.shared_tank_setup_trips--;
             b_setup_trip = level.shared_tank_setup_trips > 0;
-            if ( !b_setup_trip ) flag_set( "shared_tank_setup_done" ); // Parked: held starts release now.
+            if ( !b_setup_trip )
+            {
+                shared_setup_trace("tank setup done");
+                flag_set( "shared_tank_setup_done" ); // Parked: held starts release now.
+            }
             if ( b_setup_trip )
             {
                 self ent_flag_set( "tank_activated" );
@@ -453,12 +457,16 @@ shared_chamber_discs_randomize() // OVERRIDE: maps\mp\zm_tomb_quest_crypt::chamb
             prev_disc_pos = dials[i - 1].position;
         }
     }
-    // Consume the fast setup once, regardless of the absolute scramble number.
+    // The first scramble, and every one while a held start's setup runs, turns
+    // the dials at once: each setup orb would otherwise wait for the 4 second
+    // animation of the scramble before it.
     if(isdefined(level.shared_mound_discs_pending) && level.shared_mound_discs_pending)
     {
         level.shared_mound_discs_pending = false;
         shared_set_discs_silent(discs);
     }
+    else if(isdefined(level.segment_setup_running))
+        shared_set_discs_silent(discs);
     else
         maps\mp\zm_tomb_quest_crypt::chamber_discs_move_all_to_position(discs);
 }
@@ -556,7 +564,7 @@ shared_perks(perks)
     foreach(perk in perks)
     {
         self maps\mp\zombies\_zm_perks::give_perk(perk);
-        wait 3;
+        wait 0.05;
     }
 }
 
@@ -2298,6 +2306,13 @@ shared_starting_weapons()
     self endon("disconnect");
     while(self.sessionstate != "playing" || !self hasweapon("c96_zm")) wait 0.05;
 
+    // A held start has the Mauser upgraded from the start, not at the release.
+    if(is_true(level.segment.upgrade_mauser))
+    {
+        self takeweapon("c96_zm");
+        self maps\mp\zombies\_zm_weapons::weapon_give("c96_upgraded_zm", 1);
+    }
+
     // "STG acquired" (Windstart on): the STG-44, plain or upgraded, instead.
     switch(get_cfg_int("stg_start"))
     {
@@ -2394,6 +2409,7 @@ shared_segment()
     segment.panzer_spot_wave = undefined;   // which Panzer (1 = first) panzer_spot is for
     segment.solved_relays = undefined;      // relay_* keys always solved (shared_relay_solved)
     segment.tablet = ::shared_tablet_cleaned;
+    segment.early_teleport = false;         // true: move to the start spot at spawn (a Panzer waits for them in the Crazy Place)
     segment.on_spawn = ::shared_hold_at_start;
     segment.start = ::shared_held_start;
     return segment;
@@ -2452,6 +2468,7 @@ shared_run_segment(segment)
     attaining27 thread shared_starting_weapons();
 
     flag_wait("initial_blackscreen_passed");
+    shared_setup_trace("blackscreen passed");
     flag_set("menu_active");
     level thread shared_generators();
     if(segment.kill_plane) attaining27 thread shared_kill_plane();
@@ -2481,6 +2498,14 @@ shared_held_start_install()
     flag_clear("segment_round_ready");
     flag_init("segment_setup_done");
     flag_clear("segment_setup_done");
+    flag_init("segment_panzer_ready");
+    flag_clear("segment_panzer_ready");
+    flag_init("segment_portals_open"); // The setup's portals have finished opening.
+    flag_clear("segment_portals_open");
+    flag_init("segment_exit_open"); // A Crazy Place exit has finished opening (shared_run_chamber_exit).
+    flag_clear("segment_exit_open");
+    level.segment_setup_running = true; // Cleared at the release.
+    level.segment.upgrade_mauser = true; // shared_starting_weapons upgrades the starting Mauser.
     level thread shared_held_start_round();
 }
 
@@ -2490,13 +2515,15 @@ shared_held_start_round()
     // Spawning resumes when the player is released; release waits for this so
     // the clear cannot land after spawning was turned back on.
     flag_clear("spawn_zombies");
+    shared_setup_trace("round ready");
     flag_set("segment_round_ready");
 }
 
-// on_spawn: teleports to the start spot as soon as the player has spawned, so
-// they never stand in the spawn room during setup, then keeps them frozen until
-// release. Freezing every frame also covers the vanilla intro fade, which
-// unfreezes players.
+// on_spawn: keeps the player frozen where they spawned until release, then the
+// held start moves them once. A start with a Panzer waiting in the Crazy Place
+// (segment.early_teleport) moves them at spawn instead: the Panzer ignores a
+// player in the Crazy Place, so it stays where it landed. Freezing every frame
+// also covers the vanilla intro fade, which unfreezes players.
 shared_hold_at_start()
 {
     self endon("disconnect");
@@ -2504,7 +2531,7 @@ shared_hold_at_start()
     self enableinvulnerability();
 
     while(self.sessionstate != "playing") wait 0.05;
-    self shared_teleport_to_start(level.segment.spots, level.segment.use_exit);
+    if(level.segment.early_teleport) self shared_teleport_to_start(level.segment.spots, level.segment.use_exit);
 
     while(!flag("segment_ready"))
     {
@@ -2521,6 +2548,7 @@ shared_held_start()
     shared_setup_trace("setup start");
     self thread shared_run_setup(level.segment.setup);
     setup_start = gettime();
+    self thread shared_panzer_flow(setup_start);
     // The tank's setup trips (vanilla speed) must also be done, so it is parked.
     while(!(flag("segment_setup_done") && flag("shared_tank_setup_done")) && gettime() - setup_start < SEGMENT_SETUP_TIMEOUT * 1000) wait 0.05;
     if(!flag("segment_setup_done") || !flag("shared_tank_setup_done"))
@@ -2530,31 +2558,43 @@ shared_held_start()
     }
     shared_setup_trace("setup done, waiting segment_round_ready");
     flag_wait("segment_round_ready");
-    // A Panzer due on the start round is spawned at the mode's spot and lands
-    // before release, so it is already waiting there (shared_prespawn_panzer).
-    if(shared_panzer_due_at_spot())
-    {
-        shared_setup_trace("Panzer pre-spawn");
-        shared_prespawn_panzer();
-        while(!shared_panzer_landed() && gettime() - setup_start < SEGMENT_SETUP_TIMEOUT * 1000) wait 0.05;
-    }
+    flag_wait("segment_panzer_ready");
     shared_setup_trace("released");
+
+    // The player's one move, still frozen at timescale 10 so the zones settle
+    // during the half second below.
+    if(!level.segment.early_teleport)
+        self shared_teleport_to_start(level.segment.spots, level.segment.use_exit);
     setDvar("timescale", 1);
     wait 0.5; // Normal speed for 500 ms before anything is released.
 
     self.score = 6500;
-    // Upgrade the starting Mauser; retain the intended MP40 loadout.
-    self takeweapon("c96_zm");
-    self maps\mp\zombies\_zm_weapons::weapon_give("c96_upgraded_zm", 1);
 
     flag_set("spawn_zombies");
     level thread shared_segment_timer(level.segment.split, ::shared_craft_time_start_clock);
+    level.segment_setup_running = undefined; // An open Crazy Place exit starts its 20 seconds.
     flag_set("segment_ready");
     if(get_cfg_int("cycle_tracker")) level thread shared_cycle_tracker();
 
     self disableinvulnerability();
     self.ignoreme = 0;
     self freezecontrols(0);
+}
+
+// A Panzer due on the start round is spawned at the mode's spot as soon as the
+// round is ready and lands while the rest of the setup runs, so it is already
+// waiting there at release (shared_prespawn_panzer).
+shared_panzer_flow(setup_start)
+{
+    flag_wait("segment_round_ready");
+    if(shared_panzer_due_at_spot())
+    {
+        shared_setup_trace("Panzer pre-spawn");
+        shared_prespawn_panzer();
+        while(!shared_panzer_landed() && gettime() - setup_start < SEGMENT_SETUP_TIMEOUT * 1000) wait 0.05;
+        shared_setup_trace("Panzer landed");
+    }
+    flag_set("segment_panzer_ready");
 }
 
 shared_run_setup(setup)

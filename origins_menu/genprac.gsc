@@ -44,6 +44,15 @@ on_player_spawned_gen()
 {
 
 	self waittill("spawned_player");
+	// The loadout as soon as the player is in the game with the starting pistol
+	// (the vanilla spawn loadout would replace it).
+	while(self.sessionstate != "playing" || !self hasweapon("c96_zm")) wait 0.05;
+	self.score = 10000;
+	self giveWeapon("mp40_zm");
+	self switchToWeapon("mp40_zm");
+	self maps\mp\zombies\_zm_perks::give_perk("specialty_longersprint");
+	self maps\mp\zombies\_zm_perks::give_perk("specialty_armorvest");
+	self maps\mp\zombies\_zm_weap_beacon::player_give_beacon();
 	flag_wait("initial_blackscreen_passed");
     self freezecontrols( 1 );
 	a_boxes = getentarray("foot_box", "script_noteworthy");
@@ -54,13 +63,6 @@ on_player_spawned_gen()
 		a_box notify("soul_absorbed", self);
 
     }
-
-	self.score = 10000;
-    self giveWeapon("mp40_zm");
-	self switchToWeapon("mp40_zm");
-	self maps\mp\zombies\_zm_perks::give_perk("specialty_longersprint");
-	self maps\mp\zombies\_zm_perks::give_perk("specialty_armorvest");
-	self maps\mp\zombies\_zm_weap_beacon::player_give_beacon();
 
 	self setOrigin( (-173, -20, 320) );
 	self thread beacon_ammo();

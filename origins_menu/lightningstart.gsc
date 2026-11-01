@@ -60,11 +60,12 @@ lightningstart_segment()
 lightningstart_setup()
 {
     self shared_staff_setup_start();
+    self shared_portals_begin(LIGHTNING, level.segment.use_exit, false);
     self shared_complete_staff(ICE, 20);
     self shared_complete_staff(WIND, 20);
     self shared_complete_staff(FIRE, 0);
     self shared_get_staff_pieces(LIGHTNING);
-    self shared_open_portals(LIGHTNING, level.segment.use_exit);
+    self shared_portals_wait();
 }
 
 lightningstart_default_cfg()

@@ -121,6 +121,26 @@ on_player_spawned_panz()
 {
 
 	self waittill("spawned_player");
+	// The loadout as soon as the player is in the game with the starting pistol
+	// (the vanilla spawn loadout would replace it).
+	while(self.sessionstate != "playing" || !self hasweapon("c96_zm")) wait 0.05;
+	self.score = 10000;
+	self giveWeapon("mp40_zm");
+	self switchToWeapon("mp40_zm");
+	switch(get_cfg_int("box"))
+	{
+		case 0: // gen4
+			self maps\mp\zombies\_zm_perks::give_perk("specialty_longersprint");
+			break;
+		case 1: // gen5
+			self maps\mp\zombies\_zm_perks::give_perk("specialty_armorvest");
+			break;
+		case 2: // mid
+			self maps\mp\zombies\_zm_perks::give_perk("specialty_longersprint");
+			self maps\mp\zombies\_zm_perks::give_perk("specialty_armorvest");
+			break;
+	}
+	if(get_cfg_int("clay")) self maps\mp\zombies\_zm_weap_claymore::claymore_setup();
 	flag_wait("initial_blackscreen_passed");
     self freezecontrols( 1 );
 	level waittill("start_of_round");
@@ -167,34 +187,22 @@ on_player_spawned_panz()
     }
 
 	level waittill("start_of_round");
-	self.score = 10000;
-    self giveWeapon("mp40_zm");
-	self switchToWeapon("mp40_zm");
 
 	box_val = get_cfg_int("box");
 	switch(box_val)
     {
         case 0: // gen4
 			tp = (2895, -246, 166); //GEN4
-			self maps\mp\zombies\_zm_perks::give_perk("specialty_longersprint");
             break;
 
 		case 1: // gen5
 			tp = (-2501, -368, 195); //GEN5
-			self maps\mp\zombies\_zm_perks::give_perk("specialty_armorvest");
             break;
 
 		case 2: // mid
 			tp = (540, 795, 83); //MID
-			self maps\mp\zombies\_zm_perks::give_perk("specialty_longersprint");
-			self maps\mp\zombies\_zm_perks::give_perk("specialty_armorvest");
             break;
     }
-
-	if(get_cfg_int("clay"))
-	{
-		self maps\mp\zombies\_zm_weap_claymore::claymore_setup();
-	}
 
     if(get_cfg_int("hud") == 1)
 	{

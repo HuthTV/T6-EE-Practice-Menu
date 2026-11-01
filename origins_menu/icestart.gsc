@@ -159,6 +159,12 @@ icestart_start_teleport()
     }
     level.base_cfg["oopa"] = oopa_status;
 
+    // Held until the setup has finished too, and only then moved (Peek Code is
+    // the one start with an earlier move, to the code). A failsafe keeps a stuck
+    // setup from freezing the player for good.
+    setup_wait_start = gettime();
+    while(!flag("icestart_setup_done") && gettime() - setup_wait_start < 60000) wait 0.05;
+
     // Start Location: 1 floor, 2 mule, anything else picks one at random.
     location = get_cfg_int("start_loc");
     if(location != 1 && location != 2) location = 1 + cointoss();
@@ -176,11 +182,6 @@ icestart_start_teleport()
             self setplayerangles(ICE_MULE_ANGLES);
             break;
     }
-
-    // Held until the setup has finished too; a failsafe keeps a stuck setup from
-    // freezing the player for good.
-    setup_wait_start = gettime();
-    while(!flag("icestart_setup_done") && gettime() - setup_wait_start < 60000) wait 0.05;
 
     // Normal speed for 500 ms before the player is released.
     setDvar("timescale", 1);
