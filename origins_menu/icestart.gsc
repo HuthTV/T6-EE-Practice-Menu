@@ -268,6 +268,7 @@ icestart_default_cfg()
     settings_ar["mp40_tile_clue"] = 1; // On by default (user, 2026-10-20).
     settings_ar = shared_craft_time_defaults(settings_ar);
 	settings_ar["last_disc"] = 0;
+	settings_ar["skip_first_disc"] = 0;
 	settings_ar = shared_part_defaults(settings_ar);
 	settings_ar = shared_segment_item_defaults(settings_ar);
 	settings_ar["headshot_reward"] = 0;

@@ -83,6 +83,7 @@ firestart_default_cfg()
     settings_ar["fire_spawn"] = 0;   // Start Location: 0 Craft (default, user 2026-10-20), 1 Exit.
     settings_ar["stg_start"] = STG_NO; // STG acquired: STG_NO, STG_YES or STG_PAPPED.
     settings_ar["ice_souls"] = 0;  // "Ice prefills" (0 to FIRE_ICE_SOULS_MAX).
+    settings_ar["skip_first_disc"] = 0;
     settings_ar["last_disc"] = 0; // Craft start disc turn: 0 random, 1 = 0 turns, 2 = 1 turn...
     settings_ar["trioskip"] = 0; // 1: non-standard "No trios" robot timing.
     settings_ar = shared_craft_time_defaults(settings_ar);

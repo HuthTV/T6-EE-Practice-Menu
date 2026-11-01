@@ -360,7 +360,8 @@ puzzle_rng_visit_count()
 
 puzzle_rng_chamber_names()
 {
-    return array("Fire", "Wind", "Lightning", "Ice");
+    // Coloured by element: fire red, wind yellow, lightning purple, ice blue.
+    return array("^1Fire", "^3Wind", "^6Lightning", "^4Ice");
 }
 
 // The staffs cleared for a visit (element numbers, no repeats).
@@ -392,7 +393,7 @@ puzzle_rng_visit_text(visit)
     foreach(element in puzzle_rng_chamber_cleared(visit))
     {
         if(text != "") text += ", ";
-        text += names[element - 1];
+        text += names[element - 1] + "^7";
     }
     if(text == "") return "";
     return " (" + text + ")";

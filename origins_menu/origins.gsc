@@ -194,6 +194,8 @@ mode_is_segment_start()
         case "windstart":
         case "firestart":
         case "lightningstart":
+        case "endingprac":
+        case "windbulbs":
             return true;
         default:
             return false;
@@ -322,11 +324,11 @@ shared_build_panzer_menu(parent)
 // all_random_cycles is the "All random" action for Robot Cycles; Full Game's
 // also randomizes Rain fire, the segment starts' keeps it. Cycles before
 // first_cycle cannot happen in the mode and get no rows.
-shared_build_robot_menus(parent, all_random_cycles, first_cycle = 1)
+shared_build_robot_menus(parent, all_random_cycles, first_cycle = 1, show_rain_robot = true)
 {
 	cycles = add_submenu(parent, "cycles", "Robot Cycles", "Cycles");
 		create_option(cycles, "All random", all_random_cycles);
-		create_option(cycles, "Rain fire: ^3" + level.robot[get_cfg_int("rain_robot")], ::cfg_increment_int, "rain_robot", array(ROBOT_RANDOM, ROBOT_FREYA));
+		if(show_rain_robot) create_option(cycles, "Rain fire: ^3" + level.robot[get_cfg_int("rain_robot")], ::cfg_increment_int, "rain_robot", array(ROBOT_RANDOM, ROBOT_FREYA));
 		for(cycle = first_cycle; cycle <= ROBOT_CYCLE_COUNT; cycle++)
 			create_option(cycles, "Cycle " + cycle + ": ^3" + level.robot[get_cfg_int("cycle_" + cycle)], ::cfg_increment_int, "cycle_" + cycle, array(ROBOT_RANDOM, ROBOT_FREYA));
 
