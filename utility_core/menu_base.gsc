@@ -183,6 +183,7 @@ build_general_menu(root)
 {
 	general = add_submenu(root, "general", "General Settings", "General");
 		create_option(general, "Show Identifier/Hashes: " + cfgint_compare("show_identifier", "^2Yes", "^1No"), ::basegame_toggle_show_identifier);
+		add_cfg_choice(general, "Menu Key (with melee)", "menu_key", array("special grenade", "dpad slot 1"));
 		create_option(general, "Rage Quit", ::fast_quit);
 }
 
@@ -335,10 +336,15 @@ initialize_menu()
 
 	while(true)
 	{
+		self menu_offhand_guard();
+		if(self menu_open()) self menu_clear_actionslots();
 		if(get_open_buttons() && !isDefined(self.menu.open) && flag("menu_active"))
 		{
 			self thread open_menu();
 			wait .15;
+			// The open chord may share a button with the navigation: it acts only
+			// once released.
+			while(self menu_button_pressed()) wait .05;
 		}
 		if(self menu_open() && self menu_button_pressed())
 		{
@@ -374,6 +380,97 @@ initialize_menu()
 	}
 }
 
+// Offhand throws (special and lethal) are blocked while the menu is open, and with
+// the special grenade chord also while melee is held, so the chord cannot toss it and
+// releasing melee leaves the block on until the menu closes. Only this guard
+// re-enables what it disabled. With the equipment chord, holding melee empties the
+// equipment slot until it is released, so the chord cannot use the equipment.
+menu_offhand_guard()
+{
+	holding_chord_key = self meleebuttonpressed();
+	if(menu_equipment_chord())
+	{
+		self menu_equipment_slot_guard(holding_chord_key);
+		holding_chord_key = false;
+	}
+	if(self menu_open() || holding_chord_key)
+	{
+		if(isDefined(self.menu.offhand_blocked)) return;
+		self disableoffhandweapons();
+		self.menu.offhand_blocked = true;
+	}
+	else if(isDefined(self.menu.offhand_blocked))
+	{
+		self enableoffhandweapons();
+		self.menu.offhand_blocked = undefined;
+	}
+}
+
+menu_equipment_slot_guard(melee_held)
+{
+	if(self menu_open()) return; // The menu empties and restores every slot.
+	if(melee_held && !isDefined(self.menu.slot_emptied))
+	{
+		slot = menu_chord_slot();
+		self setactionslot(slot, "");
+		self.menu.slot_emptied = slot;
+	}
+	else if(!melee_held && isDefined(self.menu.slot_emptied))
+	{
+		self menu_restore_slot(self.menu.slot_emptied);
+		self.menu.slot_emptied = undefined;
+	}
+}
+
+// The navigation buttons are also the game's equipment slots. While the menu is
+// open the slots are emptied (the buttons are still read, so navigation works) and
+// close_menu hands them back. GSC cannot read a slot, so the restore rebuilds each
+// one from the vanilla rule that sets it. Shooting, aiming and movement are untouched.
+menu_clear_actionslots()
+{
+	for(slot = 1; slot <= 4; slot++)
+		self setactionslot(slot, "");
+}
+
+// Slot 1 and 2, the two the opening chord can use.
+menu_restore_slot(slot)
+{
+	if(slot == 1)
+	{
+		// The current equipment (shield, turret, drone, gas mask) once picked up again.
+		equipment = self get_player_equipment();
+		if(isDefined(equipment)) self setactionslot(1, "weapon", equipment);
+	}
+	else if(slot == 2)
+	{
+		// Origins Maxis drone, Buried time bomb.
+		if(self hasweapon("equip_dieseldrone_zm")) self setactionslot(2, "weapon", "equip_dieseldrone_zm");
+		else if(self hasweapon("time_bomb_detonator_zm")) self setactionslot(2, "weapon", "time_bomb_detonator_zm");
+		else if(self hasweapon("time_bomb_zm")) self setactionslot(2, "weapon", "time_bomb_zm");
+	}
+}
+
+menu_restore_actionslots()
+{
+	self.menu.slot_emptied = undefined;
+
+	// 1: the equipment. 2: Origins Maxis drone, Buried time bomb.
+	self menu_restore_slot(1);
+	self menu_restore_slot(2);
+
+	// 3: alt mode, or the revive staff when the held weapon has none and it is owned
+	// (the rule of Origins watch_staff_usage).
+	weapon = self getcurrentweapon();
+	upgraded_staff = issubstr(weapon, "staff_") && issubstr(weapon, "_upgraded_zm");
+	if(!self hasweapon("staff_revive_zm") || (!upgraded_staff && weapon != "none" && weaponaltweaponname(weapon) != "none"))
+		self setactionslot(3, "altmode");
+	else
+		self setactionslot(3, "weapon", "staff_revive_zm");
+
+	// 4: claymores.
+	if(self hasweapon("claymore_zm")) self setactionslot(4, "weapon", "claymore_zm");
+}
+
 menu_button_pressed()
 {
 	return self actionslotonebuttonpressed() || self actionslottwobuttonpressed() || self actionslotthreebuttonpressed() || self actionslotfourbuttonpressed();
@@ -381,13 +478,30 @@ menu_button_pressed()
 
 get_open_buttons()
 {
-	return (self meleebuttonpressed() && self secondaryoffhandbuttonpressed());
+	if(!self meleebuttonpressed()) return false;
+	slot = menu_chord_slot();
+	if(slot == 1) return self actionslotonebuttonpressed();
+	return self secondaryoffhandbuttonpressed();
+}
+
+// The Menu Key setting (General Settings): 0 melee + the special grenade opens the
+// menu, 1 melee + dpad slot 1 (the shield on Origins). A saved value past 1 counts as 1.
+menu_chord_slot()
+{
+	if(get_cfg_int("menu_key") > 1) return 1;
+	return get_cfg_int("menu_key");
+}
+
+menu_equipment_chord()
+{
+	return menu_chord_slot() > 0;
 }
 
 open_menu()
 {
 	self.ignoreme = 1;
 	self.menu.open = true;
+	self menu_clear_actionslots();
 	self draw_menu();
 	self refresh_menu();
 }
@@ -395,6 +509,7 @@ open_menu()
 close_menu()
 {
 	self.ignoreme = 0;
+	self menu_restore_actionslots();
 	self.menu.open = undefined;
 	self.menu.restore_armed = undefined;
 	self destroy_array(self.menu.hud);

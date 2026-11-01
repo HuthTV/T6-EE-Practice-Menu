@@ -123,7 +123,8 @@ basegame_run()
     level thread say_command_monitor();
     flag_wait("initial_blackscreen_passed");
     iPrintLn( "^7" + level.practice_map.tool_name + " ^3" + level.practice_version );
-    iPrintLn( "^7Press [^6[{+melee}]^7] + [^6[{+smoke}]^7] ^7To Open" );
+    if(menu_equipment_chord()) iPrintLn( "^7Press [^6[{+melee}]^7] + [^6[{+actionslot " + menu_chord_slot() + "}]^7] ^7To Open" );
+    else iPrintLn( "^7Press [^6[{+melee}]^7] + [^6[{+smoke}]^7] ^7To Open" );
     wait 1.8;
 
     level thread basegame_unitrigger_hud_monitor();
@@ -164,6 +165,7 @@ basegame_default_cfg()
     settings_ar["hud_active_zones"] = 0;
     settings_ar["hud_oopa"] = 1; // OOPA Countdown: 0 off, 1 on, 2 the map's spot only (Origins: R2L)
     settings_ar["show_identifier"] = 0; // Plutonium's session identifier and script hashes.
+    settings_ar["menu_key"] = 1; // The key that opens the menu with melee: 0 special grenade, 1 dpad slot 1 (the shield).
 
     if(isDefined(level.practice_map.base_cfg_defaults))
         settings_ar = [[ level.practice_map.base_cfg_defaults ]](settings_ar);
