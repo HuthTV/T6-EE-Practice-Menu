@@ -204,6 +204,7 @@ mob_plane_setup(segment)
         level waittill("start_of_round");
 
     setdvar("timescale", 1);
+    wait 0.5; // Normal speed for 500 ms before the player can move.
     setdvar("g_speed", 190);
     flag_set("plane_released"); // Phased checks start (mob_plane_install).
     if(isdefined(segment.on_start)) self [[ segment.on_start ]]();

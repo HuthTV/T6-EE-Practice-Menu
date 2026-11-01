@@ -134,6 +134,16 @@ fullgame_run()
 	level.customrandomweaponweights = ::fullgame_box_hit_weights;
 
 	flag_wait("initial_blackscreen_passed");
+	if(get_cfg_int("turbo_restarts"))
+	{
+		// Normal speed for 500 ms before the player gets control (the run clock
+		// starts with it).
+		player = get_players()[0];
+		player freezecontrols(1);
+		setDvar("timescale", 1);
+		wait 0.5;
+		player freezecontrols(0);
+	}
     level.game_start_time = gettime();
     level thread shared_segment_timer(int_compare(split_shown(SPLIT_NML), SPLIT_NML, SPLIT_ICE));
 	setDvar("timescale", 1);

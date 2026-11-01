@@ -1983,7 +1983,7 @@ shared_segment_item_defaults(settings_ar)
 {
 	foreach(key in combinearrays(shared_vinyl_keys(), array("maxis_body", "maxis_engine")))
 		settings_ar[key] = shared_part_collected_value(key);
-	settings_ar["maxis_drone_crafted"] = 0;      // Windstart on: 1 crafts and gives the drone
+	settings_ar["maxis_drone_crafted"] = 1;      // Windstart on: 1 crafts and gives the drone (route default), 0 leaves it uncrafted
 	return settings_ar;
 }
 
