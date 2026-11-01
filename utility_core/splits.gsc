@@ -44,7 +44,7 @@ practice_split(index, starts_segment)
         hud = createServerFontString("default", 1.4);
         hud.sort = 2000;
         hud.hidewheninmenu = 0;
-        hud setpoint("TOPLEFT", "TOPLEFT", -63, 75 + level.split_row * 16);
+        hud hud_set_point("TOPLEFT", "TOPLEFT", -63, 75 + level.split_row * 16);
         hud setTextUnlimited(level.split_labels[index] + game_time_string());
         timer_main_hud(hud);
         level.split_row++;
@@ -77,7 +77,7 @@ practice_splits_running()
     timer_main_hud(level.split_running);
     while(level.split_next < level.split_labels.size)
     {
-        level.split_running setpoint("TOPLEFT", "TOPLEFT", -63, 75 + level.split_row * 16);
+        level.split_running hud_set_point("TOPLEFT", "TOPLEFT", -63, 75 + level.split_row * 16);
         level.split_running setTextUnlimited(level.split_labels[split_next_shown(level.split_next)] + game_time_string());
         wait 0.05;
     }

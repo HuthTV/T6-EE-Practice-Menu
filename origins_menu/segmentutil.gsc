@@ -715,7 +715,7 @@ shared_segment_split(split)
         hud = createServerFontString("default", 1.4);
         hud.sort = 2000;
         hud.hidewheninmenu = 0;
-        hud setpoint("TOPLEFT", "TOPLEFT", -63, 75 + level.segment_row * 16);
+        hud hud_set_point("TOPLEFT", "TOPLEFT", -63, 75 + level.segment_row * 16);
         hud setTextUnlimited(level.segment_names[split] + game_time_string());
         timer_main_hud(hud);
         level.segment_row++;
@@ -741,7 +741,7 @@ shared_segment_running()
     timer_main_hud(level.segment_running);
     while(true)
     {
-        level.segment_running setpoint("TOPLEFT", "TOPLEFT", -63, 75 + level.segment_row * 16);
+        level.segment_running hud_set_point("TOPLEFT", "TOPLEFT", -63, 75 + level.segment_row * 16);
         level.segment_running setTextUnlimited(level.segment_names[split_next_shown(level.segment_next)] + game_time_string());
         wait 0.05;
     }

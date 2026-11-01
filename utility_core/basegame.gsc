@@ -863,9 +863,9 @@ basegame_update_health_bar()
         self.practice_health_value.color = (1, 1, 1);
     }
     shift = self basegame_hud_left_shift();
-    self.practice_health_bg.x = -10 + shift;
-    self.practice_health_fill.x = -9 + shift;
-    self.practice_health_value.x = -30 + shift;
+    self.practice_health_bg.x = hud_edge_x("left", -10) + shift;
+    self.practice_health_fill.x = hud_edge_x("left", -9) + shift;
+    self.practice_health_value.x = hud_edge_x("left", -30) + shift;
     self.practice_hud_shift = shift;
 
     // Downed and game-over players keep 100 health; show them as dead.
@@ -920,7 +920,7 @@ basegame_update_zone_hud()
         self.practice_zone_hud.sort = 2000;
         self.practice_zone_hud.hidewheninmenu = 1;
     }
-    self.practice_zone_hud.x = -30 + self basegame_hud_left_shift();
+    self.practice_zone_hud.x = hud_edge_x("left", -30) + self basegame_hud_left_shift();
     zone = undefined;
     if(isdefined(level.zones)) zone = self maps\mp\zombies\_zm_zonemgr::get_player_zone();
     if(!isdefined(zone)) zone = "unknown";
@@ -977,8 +977,8 @@ basegame_update_regen_bar()
         self.practice_regen_fill.color = (0.65, 0.65, 0.65);
         self.practice_regen_fill.sort = 2000;
     }
-    self.practice_regen_bg.x = -10 + self.practice_hud_shift;
-    self.practice_regen_fill.x = -9 + self.practice_hud_shift;
+    self.practice_regen_bg.x = hud_edge_x("left", -10) + self.practice_hud_shift;
+    self.practice_regen_fill.x = hud_edge_x("left", -9) + self.practice_hud_shift;
     self.practice_regen_bg.alpha = 0;
     self.practice_regen_fill.alpha = 0;
     if(!self basegame_hud_alive() || !isdefined(self.maxhealth) || self.health >= self.maxhealth)

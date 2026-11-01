@@ -105,6 +105,60 @@ register_mode(name, label, initialize, run, build_menu)
 }
 
 /*##############################################################################
+                              HUD placement
+##############################################################################*/
+// An element anchored past a screen edge (a negative x on the left, a positive x
+// on the right) is cut off on the narrower aspect ratios and sits too far in on
+// the wider ones. hud_edge_x moves it by the per-ratio correction the B2OP patch
+// uses for the same engine (4:3, 3:2 and 5:4 count as 4:3). Anything placed near
+// an edge goes through hud_edge_x or hud_set_point. Splitscreen is left alone.
+
+// 169 (16:9 and the ratios between), 1610, 43 or 2109, from the r_mode dvar.
+hud_aspect()
+{
+    if(isDefined(level.hud_aspect)) return level.hud_aspect;
+    level.hud_aspect = 169;
+    size = strtok(getDvar("r_mode"), "x");
+    if(size.size == 2 && int(size[1]) > 0)
+    {
+        ratio = int(int(size[0]) * 100 / int(size[1]) + 0.5);
+        if(ratio < 156) level.hud_aspect = 43;
+        else if(ratio < 166) level.hud_aspect = 1610;
+        else if(ratio > 200) level.hud_aspect = 2109;
+    }
+    return level.hud_aspect;
+}
+
+// alignment: "left", "TOPLEFT", "right" and so on (any text holding left or right).
+hud_edge_x(alignment, x)
+{
+    if(get_players().size > 1) return x;
+    aspect = hud_aspect();
+    if(aspect == 169) return x;
+
+    alignment = tolower(alignment);
+    if(issubstr(alignment, "left") && x < 0)
+    {
+        if(aspect == 1610) return x + 6;
+        if(aspect == 43) return x + 14;
+        if(aspect == 2109) return x - 21;
+    }
+    else if(issubstr(alignment, "right") && x > 0)
+    {
+        if(aspect == 1610) return x - 6;
+        if(aspect == 43) return x - 14;
+        if(aspect == 2109) return x + 21;
+    }
+    return x;
+}
+
+// self setpoint with the edge correction on x (self = the HUD element).
+hud_set_point(point, relative, x, y)
+{
+    self setpoint(point, relative, hud_edge_x(point, x), y);
+}
+
+/*##############################################################################
                               Timer settings
 ##############################################################################*/
 // A mode with a run timer declares it after register_mode, and gets a Timer menu

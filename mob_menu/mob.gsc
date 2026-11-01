@@ -815,7 +815,7 @@ mob_spawn_probe_hud()
                 hud.aligny = "top";
                 hud.horzalign = "left";
                 hud.vertalign = "middle";
-                hud.x = -62;
+                hud.x = hud_edge_x("left", -62);
                 hud.y = -120;
                 hud.hidewheninmenu = 1;
             }
