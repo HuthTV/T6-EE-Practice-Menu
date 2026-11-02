@@ -97,7 +97,7 @@ practice_splits_end()
                               Start time setting
 ##############################################################################*/
 // The run time a segment start begins at (O-Prac's "Craft Time", which still
-// has its own copy as shared_craft_time_*): presets every few seconds, or a
+// has its own copy as shared_start_time_*): presets every few seconds, or a
 // custom minutes:seconds time. A mode describes its presets once, in its
 // initialize function, BEFORE its cfg is loaded:
 //

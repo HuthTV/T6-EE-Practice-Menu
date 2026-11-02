@@ -6,6 +6,7 @@
 
 #include scripts\zm\utility_core\basegame;
 #include scripts\zm\utility_core\menu_utility;
+#include scripts\zm\utility_core\saveslots;
 
 /*##############################################################################
                               Menu panel layout
@@ -44,6 +45,7 @@ build_menu_tree()
 	self build_modes_menu(root);
 	if(isDefined(level.mode.build_menu))
 		self [[ level.mode.build_menu ]](root);
+	self add_saveslots_menu();
 	self add_restore_defaults_option();
 	self build_timer_menu(root);
 	self build_hud_menu(root);
@@ -57,7 +59,7 @@ build_menu_tree()
 // mode's Settings. Each mode builds only the menus it has.
 root_menu_order()
 {
-	return array("gamemodes", "mapsettings", "HUD", "randomness", "cycles", "feet", "templars", "vinyls", "parts", "timer", "cheats", "general");
+	return array("gamemodes", "mapsettings", "HUD", "randomness", "cycles", "feet", "templars", "timer", "cheats", "vinyls", "parts", "general");
 }
 
 // Stable sort of the root menu's rows by root_menu_order. Rows that are not a
@@ -129,16 +131,18 @@ add_restore_defaults_option()
 	if(!isDefined(self.menu.option_text["mapsettings"]) || !isDefined(level.mode_cfg_defaults)) return;
 	// Short: a long row runs past the menu's right edge.
 	if(is_true(self.menu.restore_armed))
-		create_option("mapsettings", "^1Confirm Restore Defaults Settings", ::restore_mode_defaults);
+		create_option("mapsettings", "^1Confirm Restore Defaults", ::restore_mode_defaults);
 	else
-		create_option("mapsettings", "Restore " + level.mode.label + " Defaults Settings", ::restore_mode_defaults);
+		create_option("mapsettings", "Restore " + level.mode.label + " Defaults", ::restore_mode_defaults);
 }
 
-// Leaving the row (cursor move, back) cancels a pending "Confirm Restore".
+// Leaving the row (cursor move, back) cancels a pending "Confirm Restore" or a
+// save slot's "Confirm Overwrite".
 disarm_restore()
 {
-	if(!is_true(self.menu.restore_armed)) return;
+	if(!is_true(self.menu.restore_armed) && !isDefined(self.menu.saveslot_armed)) return;
 	self.menu.restore_armed = undefined;
+	self.menu.saveslot_armed = undefined;
 	self refresh_menu();
 }
 
@@ -187,23 +191,27 @@ build_general_menu(root)
 		create_option(general, "Rage Quit", ::fast_quit);
 }
 
-// Core rows, then the map's rows (level.practice_map.build_hud).
+// Core rows, the map's top rows (build_hud_top) after the Speedometer, then the
+// map's rows (build_hud). Order by the user, 2026-11-02.
 build_hud_menu(root)
 {
 	hud = add_submenu(root, "HUD", "HUD");
-		create_option(hud, "Speedometer: " + cfgint_compare("hud_speed"), ::cfg_toggle_speedometer);
-		create_option(hud, "Active unit trigger: " + cfgint_compare("hud_unitrigger"), ::basegame_toggle_unitrigger_hud);
 		add_cfg_toggle(hud, "Zombies Spawned", "hud_spawned");
 		add_cfg_toggle(hud, "Zombies Remaining", "hud_remaning");
-		add_cfg_choice(hud, "Point based", "hud_points", array("^1disabled", "^3relative", "^3absolute"));
-		add_cfg_toggle(hud, "Health Bar", "hud_health");
+		create_option(hud, "Speedometer: " + cfgint_compare("hud_speed"), ::cfg_toggle_speedometer);
+		if(isDefined(level.practice_map.build_hud_top))
+			self [[ level.practice_map.build_hud_top ]](hud);
 		oopa = array("^1off", "^2on");
 		if(isDefined(level.practice_map.oopa_hud_spot_label)) oopa[2] = "^3" + level.practice_map.oopa_hud_spot_label;
 		add_cfg_choice(hud, "OOPA Countdown", "hud_oopa", oopa);
+		add_cfg_choice(hud, "Point based", "hud_points", array("^1disabled", "^3relative", "^3absolute"));
+		add_cfg_toggle(hud, "Health Bar", "hud_health");
 		add_cfg_toggle(hud, "Current Zone", "hud_zone");
 		add_cfg_toggle(hud, "Active Zones", "hud_active_zones");
 	if(isDefined(level.practice_map.build_hud))
 		self [[ level.practice_map.build_hud ]](hud);
+	// Always the last row (user, 2026-11-02).
+	create_option(hud, "Active unit trigger: " + cfgint_compare("hud_unitrigger"), ::basegame_toggle_unitrigger_hud);
 }
 
 // Core rows, then the map's rows (level.practice_map.build_cheats).
@@ -512,6 +520,7 @@ close_menu()
 	self menu_restore_actionslots();
 	self.menu.open = undefined;
 	self.menu.restore_armed = undefined;
+	self.menu.saveslot_armed = undefined;
 	self destroy_array(self.menu.hud);
 	for(row = 0; row < self.menu.rows.size; row++)
 		self.menu.rows[row] destroy();

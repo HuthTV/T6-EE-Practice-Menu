@@ -6,6 +6,7 @@
 
 #include scripts\zm\utility_core\menu_base;
 #include scripts\zm\utility_core\menu_utility;
+#include scripts\zm\utility_core\saveslots;
 
 /*##############################################################################
                               Map descriptor and start-up
@@ -16,6 +17,7 @@
 // Every hook is optional:
 //   initialize()               while the map loads, after the base cfg and before
 //                              the mode's initialize: map-wide replacefuncs
+//   build_hud_top(menu)        HUD rows right after the Speedometer
 //   build_hud(menu)            HUD rows after the core rows
 //   build_cheats(menu)         Cheats rows after the core rows
 //   base_cfg_defaults(cfg)     returns cfg plus the map's basegame.cfg settings
@@ -136,13 +138,6 @@ basegame_run()
     level thread basegame_active_zones_hud_monitor();
 }
 
-reset_dvars()
-{
-	setDvar("timescale", 1);
-	setDvar("g_speed", 190);
-	setDvar("g_ai", 1);
-}
-
 basegame_cfg_init()
 {
     level.base_cfg_str = level.practice_map.cfg_dir + "basegame.cfg";
@@ -153,7 +148,6 @@ basegame_default_cfg()
 {
     settings_ar = [];
 
-    // Convert all set_dvar_if_unset calls to cfg defaults
     settings_ar["hud_points"] = 0;
     settings_ar["oopa"] = 1;
     settings_ar["hud_remaning"] = 0;
@@ -164,8 +158,8 @@ basegame_default_cfg()
     settings_ar["hud_unitrigger"] = 0;
     settings_ar["hud_active_zones"] = 0;
     settings_ar["hud_oopa"] = 1; // OOPA Countdown: 0 off, 1 on, 2 the map's spot only (Origins: R2L)
-    settings_ar["show_identifier"] = 0; // Plutonium's session identifier and script hashes.
-    settings_ar["menu_key"] = 1; // The key that opens the menu with melee: 0 special grenade, 1 dpad slot 1 (the shield).
+    settings_ar["show_identifier"] = 1; // Plutonium's session identifier and script hashes (user, 2026-11-02).
+    settings_ar["menu_key"] = 0; // The key that opens the menu with melee: 0 special grenade (user, 2026-11-02), 1 dpad slot 1 (the shield).
 
     if(isDefined(level.practice_map.base_cfg_defaults))
         settings_ar = [[ level.practice_map.base_cfg_defaults ]](settings_ar);
@@ -634,6 +628,8 @@ say_command_monitor()
 	while(true)
 	{
 		level waittill("say", message, player);
+		// Before the lowercasing below: slot names keep their case.
+		if(player saveslot_say_command(message)) continue;
 		switch(tolower(message))
 		{
 			case "max":

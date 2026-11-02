@@ -297,11 +297,6 @@ get_upgrade(weapon)
         return get_upgrade_weapon(weapon, 1 );
 }
 
-play_sound()
-{
-	self playlocalSound("mus_lau_rank_up");
-}
-
 destroy_array(array)
 {
 	keys=getArrayKeys(array);
@@ -510,9 +505,4 @@ bool_compare_string(bol, a, b)
 {
     if(bol) return a;
     else    return b;
-}
-
-int_in_range( val, min, max )
-{
-    return min <= val && max >= val;
 }
