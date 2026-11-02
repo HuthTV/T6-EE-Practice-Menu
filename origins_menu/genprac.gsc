@@ -104,7 +104,7 @@ genprac_build_menu(root)
 			add_cfg_toggle(gens, "Gen 4", "nml_right");
 			add_cfg_toggle(gens, "Gen 5", "nml_left");
 			add_cfg_toggle(gens, "Gen 6", "church");
-		add_cfg_toggle(gen_prac, "Teleport Throws", "teleport_throw");
+		add_cfg_choice(gen_prac, "G-Strike Throws", "teleport_throw", array("normal", "teleport to landing", "follow in flight"));
 }
 
 genprac_reset_all_gens()
@@ -112,10 +112,10 @@ genprac_reset_all_gens()
     level.mode_cfg["start_bunker"] = 1; //gen1
     level.mode_cfg["tank_trench"] = 1; //gen2
     level.mode_cfg["mid_trench"] = 1; //gen3
-    level.mode_cfg["nml_left"] = 1; //gen4
-    level.mode_cfg["nml_right"] = 1; //gen5
+    level.mode_cfg["nml_left"] = 1; //gen5
+    level.mode_cfg["nml_right"] = 1; //gen4
     level.mode_cfg["church"] = 1; //gen6
-    level.mode_cfg["teleport_throw"] = 1;
+    level.mode_cfg["teleport_throw"] = THROW_TELEPORT;
     write_config(level.mode_cfg, level.mode_cfg_str);
     self refresh_menu();
 }
@@ -162,11 +162,55 @@ beacon_tp()
     while(true)
     {
         level waittill("beacon_land");
-        if(get_cfg_int("teleport_throw"))
+        if(get_cfg_int("teleport_throw") == THROW_TELEPORT)
         {
             self setOrigin( level.beacon_cord );
         }
     }
+}
+
+// Promod's nade training: the player rides a script model linked to the grenade,
+// so the game itself keeps the camera on the grenade's flight every frame. The
+// model sits on the grenade (no offset to swing around it) and the player is
+// linked with free look. The out-of-playable-area monitor is off for the ride.
+// Once the grenade lands (or is gone) the player waits THROW_FOLLOW_RETURN_DELAY
+// seconds there and goes back to where they threw from.
+genprac_follow_throw(grenade)
+{
+    self endon("disconnect");
+
+    if(is_true(self.following_throw)) return;
+    self.following_throw = true;
+
+    throw_origin = self.origin;
+    throw_angles = self getplayerangles();
+
+    self notify("stop_player_out_of_playable_area_monitor");
+
+    mover = spawn("script_model", grenade.origin);
+    mover setmodel("tag_origin");
+    mover.angles = grenade.angles;
+    mover linkto(grenade);
+    self playerlinktodelta(mover, "tag_origin", 1, 180, 180, 85, 85);
+    self setplayerangles(throw_angles);
+
+    grenade thread genprac_follow_throw_land();
+    while(isdefined(grenade) && !is_true(grenade.follow_landed)) wait 0.05;
+    wait THROW_FOLLOW_RETURN_DELAY;
+
+    self unlink();
+    mover delete();
+    self setorigin(throw_origin);
+    self setplayerangles(throw_angles);
+    self thread maps\mp\zombies\_zm::player_out_of_playable_area_monitor();
+    self.following_throw = undefined;
+}
+
+genprac_follow_throw_land()
+{
+    self endon("death");
+    self waittill("stationary");
+    self.follow_landed = true;
 }
 
 beacon_ammo()
@@ -214,12 +258,11 @@ genprac_get_recapture_zone( s_last_recapture_zone )
     }
 
     active = [];
-    generators = array("_start_bunker", "_tank_trench", "_mid_trench", "_nml_left", "_nml_right", "_church");
+    generators = array("start_bunker", "tank_trench", "mid_trench", "nml_right", "nml_left", "church");
 
-    foreach( dvar in generators)
+    foreach( key in generators)
     {
-        gen_active = get_cfg_int(dvar);
-        if(gen_active) active[active.size] = "generator" + dvar;
+        if(get_cfg_int(key)) active[active.size] = "generator_" + key;
     }
 
     active = array_randomize(active);
@@ -257,6 +300,9 @@ genprac_player_throw_beacon( grenade, num_attractors, max_attract_dist, attract_
             grenade delete();
             return;
         }
+
+        if ( get_cfg_int( "teleport_throw" ) == THROW_FOLLOW )
+            self thread genprac_follow_throw( grenade ); // ADDED
 
         grenade hide();
         model = spawn( "script_model", grenade.origin );
@@ -445,10 +491,10 @@ genprac_default_cfg()
     settings_ar["start_bunker"] = 0; //gen1
     settings_ar["tank_trench"] = 1; //gen2
     settings_ar["mid_trench"] = 1; //gen3
-    settings_ar["nml_left"] = 1; //gen4
-    settings_ar["nml_right"] = 1; //gen5
+    settings_ar["nml_left"] = 1; //gen5
+    settings_ar["nml_right"] = 1; //gen4
     settings_ar["church"] = 0; //gen6
-    settings_ar["teleport_throw"] = 0;
+    settings_ar["teleport_throw"] = THROW_OFF;
 
     return settings_ar;
 }

@@ -126,3 +126,11 @@
 #define BOOMHILDA_AMMO_RANDOM  16  // Setting index past 150: a random total.
 #define BOOMHILDA_CLIP_FULL    0   // As much of the total in the clip as fits.
 #define BOOMHILDA_CLIP_RANDOM  1   // Any split of the total the clip and stock can hold.
+
+/*##############################################################################
+    Gen practice: G-strike throws (teleport_throw)
+##############################################################################*/
+#define THROW_OFF       0
+#define THROW_TELEPORT  1   // Teleport to where the G-strike lands.
+#define THROW_FOLLOW    2   // Ride the G-strike in flight, then go back to the throw spot.
+#define THROW_FOLLOW_RETURN_DELAY 2 // Seconds at the landing spot before going back.
