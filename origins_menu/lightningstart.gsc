@@ -2,6 +2,7 @@
 #include common_scripts\utility;
 #include maps\mp\zombies\_zm_utility;
 
+#include scripts\zm\utility_core\menu_base;
 #include scripts\zm\utility_core\menu_utility;
 #include scripts\zm\origins_menu\segmentutil;
 #include scripts\zm\origins_menu\staffutil;
@@ -16,28 +17,33 @@
 // the player starts on round 14 carrying the Lightning crystal, with Lightning
 // uncrafted, every Lightning relay solved, and the chosen number of zombies left
 // in the round. The tank finishes its setup trips at the church.
+// Start spots: Craft faces the Lightning staff, Exit is the Lightning Crazy Place exit,
+// STG is STG_START_ORIGIN with the dials as scrambled.
 
-// Start spots (origin, view angles). Craft: excavation floor, facing the
-// Lightning staff. Exit: the Lightning Crazy Place exit.
-#define LIGHTNING_CRAFT_ORIGIN  (50.0612, 199.082, -751.875)
-#define LIGHTNING_CRAFT_ANGLES  (11.5839, 79.2444, 0)
-#define LIGHTNING_EXIT_ORIGIN   (9633.01, -6973.31, -345.875)
-#define LIGHTNING_EXIT_ANGLES   (359.462, 139.132, 0)
+// Start Location (lightning_spawn), listed Craft, STG, Exit.
+#define LIGHTNING_LOC_CRAFT  0
+#define LIGHTNING_LOC_EXIT   1
+#define LIGHTNING_LOC_STG    2
 
 lightningstart_initialize()
 {
-    // Craft time presets: 24:10 to 26:10, every 5 seconds, 25:10 by default.
-    // Custom Craft: 23 to 31 minutes (Firestart + 4).
-    shared_craft_time_setup("24:10", "26:10", 5, "25:10", 23, 31);
-    puzzle_rng_install();
+    // Start Time on the Lightning craft: 24:10 to 26:10, every 5 seconds, 25:10
+    // by default. Custom: 23 to 31 minutes (Firestart + 4). STG has its own, the
+    // same range for now (a guess).
+    shared_start_time_add("craft", "craft", "Craft", "24:10", "26:10", 5, "25:10", 23, 31);
+    shared_start_time_add("stg", "craft", "Craft", "24:10", "26:10", 5, "25:10", 23, 31);
+    level.start_time_choices = ::lightningstart_start_time_choices;
+    puzzle_rng_install(PUZZLE_RNG_CHAMBER);
     mode_cfg_load("lightningstart", lightningstart_default_cfg());
     shared_segment_install(lightningstart_segment());
     shared_held_start_install();
 }
 
-lightningstart_run()
+// level.start_time_choices: STG has its own time.
+lightningstart_start_time_choices()
 {
-    level shared_run_segment(level.segment);
+    if(get_cfg_int("lightning_spawn") == LIGHTNING_LOC_STG) return array("stg");
+    return array("craft");
 }
 
 lightningstart_segment()
@@ -49,10 +55,14 @@ lightningstart_segment()
     if(zombies > 0) segment.round_zombies = zombies;
     segment.staffs = array(ICE, WIND, FIRE);
     segment.gems = array(ICE, FIRE, WIND, LIGHTNING);
-    segment.spots = shared_start_spots(LIGHTNING_CRAFT_ORIGIN, LIGHTNING_CRAFT_ANGLES, LIGHTNING_EXIT_ORIGIN, LIGHTNING_EXIT_ANGLES);
-    segment.use_exit = get_cfg_int("lightning_spawn") == 1;
+    segment.spots = shared_start_spots(CRAFT_LIGHTNING_ORIGIN, CRAFT_LIGHTNING_ANGLES, EXIT_LIGHTNING_ORIGIN, EXIT_LIGHTNING_ANGLES);
+    segment.use_exit = get_cfg_int("lightning_spawn") == LIGHTNING_LOC_EXIT;
     // Every Lightning relay is solved by this point of the route.
-    segment.solved_relays = array("relay_start", "relay_tank", "relay_air", "relay_elec", "relay_ruins", "relay_ice", "relay_village");
+    segment.solved_relays = shared_relay_keys();
+    segment.first_scramble = 4;
+    if(!segment.use_exit) segment.disc_shortcut_gem = "crypt_gem_elec";
+    if(get_cfg_int("lightning_spawn") == LIGHTNING_LOC_STG) shared_segment_stg(segment, CRAFT_LIGHTNING_ANGLES);
+    segment.drone_option = true;
     segment.setup = ::lightningstart_setup;
     return segment;
 }
@@ -68,49 +78,45 @@ lightningstart_setup()
     self shared_portals_wait();
 }
 
+lightningstart_build_menu(root)
+{
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
+        shared_add_location_choice(settings, "lightning_spawn", array(LIGHTNING_LOC_CRAFT, LIGHTNING_LOC_STG, LIGHTNING_LOC_EXIT), array("Craft", "STG", "Exit"));
+        self shared_start_time_menu(settings);
+        add_cfg_toggle(settings, "Trio skip", "trioskip", "^2Yes", "^1No");
+        shared_add_stg_choice(settings);
+        self shared_boomhilda_menu(settings);
+        // Disc Turn is for the Craft start: Exit keeps the normal scramble, STG
+        // leaves the dials as scrambled.
+        if(get_cfg_int("lightning_spawn") == LIGHTNING_LOC_CRAFT) shared_add_disc_turn_choice(settings);
+        if(get_cfg_int("lightning_spawn") != LIGHTNING_LOC_STG) add_cfg_toggle(settings, "Skip First Disc", "skip_first_disc", "^2Yes", "^1No");
+        create_option(settings, "Zombies left: ^3" + shared_zombies_left_text("lightning_zombies"), ::cfg_increment_int, "lightning_zombies", array(0, 24));
+
+    self shared_build_items_menu(root);
+    self shared_build_segment_menus(root);
+}
+
 lightningstart_default_cfg()
 {
-	settings_ar = [];
+    settings_ar = [];
 
-	settings_ar["dt_start"] = 1;
-    settings_ar["lightning_spawn"] = 1;   // Start Location: 0 Craft, 1 Exit (default, user 2026-10-20).
+    settings_ar["dt_start"] = 1;
+    settings_ar["lightning_spawn"] = LIGHTNING_LOC_EXIT; // Start Location (LIGHTNING_LOC_*): Exit by default (user 2026-10-20).
     settings_ar["stg_start"] = STG_NO; // STG acquired: STG_NO, STG_YES or STG_PAPPED.
+    settings_ar = shared_boomhilda_defaults(settings_ar);
     settings_ar["lightning_zombies"] = 0; // Zombies left in round 14; 0 the full round.
     settings_ar["skip_first_disc"] = 0;
     settings_ar["last_disc"] = 0; // Craft start disc turn: 0 random, 1 = 0 turns, 2 = 1 turn...
     settings_ar["trioskip"] = 0; // 1: non-standard "No trios" robot timing.
-    settings_ar = shared_craft_time_defaults(settings_ar);
-	settings_ar = shared_part_defaults(settings_ar);
-	settings_ar = shared_segment_item_defaults(settings_ar);
-	settings_ar["headshot_reward"] = 0;
+    settings_ar = shared_start_time_defaults(settings_ar);
+    settings_ar = shared_part_defaults(settings_ar);
+    settings_ar = shared_segment_item_defaults(settings_ar);
+    settings_ar["headshot_reward"] = 0;
 
-	settings_ar["panzer_2"] = 0;
-	settings_ar["panzer_3"] = 0;
-
-	settings_ar["relay_start"] = 1;
-	settings_ar["relay_tank"] = 1; // Gen2 electrical relay: solved tank_platform orientation.
-	settings_ar["relay_air"] = 0;
-	settings_ar["relay_elec"] = 1;
-	settings_ar["relay_ruins"] = 1;
-	settings_ar["relay_ice"] = 0;
-	settings_ar["relay_village"] = 1;
-
-	settings_ar = shared_templar_defaults(settings_ar);
-
-	// Robot cycles and feet
-	for(cycle = 1; cycle <= ROBOT_CYCLE_COUNT; cycle++)
-	{
-		settings_ar["cycle_" + cycle] = ROBOT_RANDOM;
-		settings_ar["foot_" + cycle] = FOOT_RANDOM;
-	}
-
-    settings_ar["disc_4"] = 0;
-
-    settings_ar["rain_foot"] = FOOT_LEFT;
-    settings_ar["rain_robot"] = ROBOT_ODIN; // Rain Fire hatch robot (segment default).
-    settings_ar["cycle_tracker_ms"] = 0;
-    settings_ar["cycle_tracker"] = 1;
-
+    settings_ar = shared_schedule_defaults(settings_ar);
+    settings_ar = shared_relay_defaults(settings_ar, true);
+    settings_ar = shared_robot_defaults(settings_ar, FOOT_LEFT);
+    settings_ar = shared_disc_defaults(settings_ar, 4);
     settings_ar = puzzle_rng_defaults(settings_ar);
     return settings_ar;
 }

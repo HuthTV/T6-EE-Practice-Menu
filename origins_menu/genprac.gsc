@@ -442,7 +442,6 @@ genprac_default_cfg()
 {
     settings_ar = [];
 
-    // Convert all set_dvar_if_unset calls to cfg defaults
     settings_ar["start_bunker"] = 0; //gen1
     settings_ar["tank_trench"] = 1; //gen2
     settings_ar["mid_trench"] = 1; //gen3

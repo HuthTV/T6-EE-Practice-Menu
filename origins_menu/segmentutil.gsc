@@ -16,10 +16,8 @@
 /*##############################################################################
                               Segment replacefuncs
 ##############################################################################*/
-// Hooks every segment start (Ice, Wind, Fire, Lightning) installs. Callers set
-// level.shared_tank_setup_trips, call shared_schedules_init, and add their own
-// disc and checkpoint hooks. delete_zombie_noone_looking is not hooked: the
-// former copy matched vanilla exactly.
+// Hooks every segment start installs (through shared_segment_install).
+// delete_zombie_noone_looking is not hooked: the former copy matched vanilla exactly.
 shared_segment_replacefuncs()
 {
     // Tank
@@ -44,7 +42,7 @@ shared_segment_replacefuncs()
     replacefunc( maps\mp\zm_tomb_craftables::randomize_craftable_spawns, ::shared_randomize_craftable_spawns );
 
     // Out-of-playable-area and despawn checks on a real run's timing from the
-    // start's clock (start_robots, set by shared_craft_time_start_clock). Held
+    // start's clock (start_robots, set by shared_start_clock). Held
     // starts hold them until release (shared_held_start_install); Icestart, from
     // the black screen. The out-of-area check is the core monitor (basegame).
     practice_check_phasing(undefined, "start_robots");
@@ -275,6 +273,40 @@ shared_relay_fixed()
 	self iprintln("This start always has it solved");
 }
 
+// Relay settings in menu order, with their menu labels.
+shared_relay_keys()
+{
+	return array("relay_start", "relay_tank", "relay_air", "relay_elec", "relay_ruins", "relay_ice", "relay_village");
+}
+
+shared_relay_labels()
+{
+	return array("Spawn", "Gen2", "Gen4", "Gen5", "Middle", "Bot Church", "Top Church");
+}
+
+shared_build_relays_menu(root)
+{
+	relays = add_submenu(root, "relays", "Electric Relays", "Relays");
+		keys = shared_relay_keys();
+		labels = shared_relay_labels();
+		for(i = 0; i < keys.size; i++)
+			shared_add_relay_row(relays, labels[i], keys[i]);
+}
+
+// Spawn, Gen5, Middle and Top Church solved. Gen2 (tank_platform) too once
+// the route has done it (every start after Ice).
+shared_relay_defaults(settings_ar, gen2_solved)
+{
+	foreach(key in shared_relay_keys())
+		settings_ar[key] = 0;
+	settings_ar["relay_start"] = 1;
+	settings_ar["relay_tank"] = gen2_solved;
+	settings_ar["relay_elec"] = 1;
+	settings_ar["relay_ruins"] = 1;
+	settings_ar["relay_village"] = 1;
+	return settings_ar;
+}
+
 // "Zombies left" setting text: 0 is the full round.
 shared_zombies_left_text(key)
 {
@@ -456,6 +488,8 @@ shared_chamber_discs_randomize() // OVERRIDE: maps\mp\zm_tomb_quest_crypt::chamb
         setting = get_cfg_int("last_disc");
         turns = setting - 1;
         if(setting == 0) turns = randomintrange(0, 4);
+        // segment.last_disc_aligned: every dial lined up, no Last Disc Turn.
+        if(level.segment.last_disc_aligned) turns = 0;
         dials[0].position = aligned;
         dials[1].position = aligned;
         dials[2].position = (aligned + turns) % 4;
@@ -465,8 +499,9 @@ shared_chamber_discs_randomize() // OVERRIDE: maps\mp\zm_tomb_quest_crypt::chamb
     //MODIFIED END
 
     // Skip First Disc: after the initial scramble the first dial is never touched
-    // again, so it keeps the position it had before this scramble.
-    if(get_cfg_int("skip_first_disc") && level.n_disc_scrambles > 1 && isdefined(first_dial_position))
+    // again, so it keeps the position it had before this scramble. Not on a start
+    // whose dials were never turned (segment.discs_untouched, STG).
+    if(get_cfg_int("skip_first_disc") && !level.segment.discs_untouched && level.n_disc_scrambles > 1 && isdefined(first_dial_position))
         dials[DISC_FIRST_DIAL].position = first_dial_position;
     // Dial order and script_int (1 is the bottom disc), to confirm which dial is first.
     for(i = 0; i < dials.size; i++)
@@ -486,7 +521,8 @@ shared_chamber_discs_randomize() // OVERRIDE: maps\mp\zm_tomb_quest_crypt::chamb
 }
 
 // Which crypt gem the opening shortcut lines the dials up with at this scramble,
-// or undefined to scramble normally.
+// or undefined to scramble normally. A mode sets segment.disc_shortcut_gem for
+// its first scramble (segment.first_scramble):
 //   Ice:  the mound opening (scramble 1) -> blue (Icestart and Ice code start).
 //   Wind: the setup Ice orb (scramble 2) -> yellow, only for the Craft start.
 //   Fire: the setup Wind orb (scramble 3) -> red, only for the Craft start.
@@ -494,15 +530,8 @@ shared_chamber_discs_randomize() // OVERRIDE: maps\mp\zm_tomb_quest_crypt::chamb
 //         Exit starts keep the normal scramble.
 shared_disc_shortcut_gem()
 {
-    if((level.gamemode == "icestart" || level.gamemode == "icecodestart") && level.n_disc_scrambles == 1)
-        return "crypt_gem_ice";
-    if(level.gamemode == "windstart" && level.n_disc_scrambles == 2 && get_cfg_int("wind_spawn") != 1)
-        return "crypt_gem_air";
-    if(level.gamemode == "firestart" && level.n_disc_scrambles == 3 && get_cfg_int("fire_spawn") != 1)
-        return "crypt_gem_fire";
-    if(level.gamemode == "lightningstart" && level.n_disc_scrambles == 4 && get_cfg_int("lightning_spawn") != 1)
-        return "crypt_gem_elec";
-    return undefined;
+    if(level.n_disc_scrambles != level.segment.first_scramble) return undefined;
+    return level.segment.disc_shortcut_gem;
 }
 
 shared_set_discs_silent(discs)
@@ -630,10 +659,12 @@ shared_box_reward_state(name, consumed)
                               Hud timer
 ##############################################################################*/
 // Splits run from start_split to Freedom; each case falls through to the next.
-// Without clock_start the run clock (level.game_start_time) is already running
-// and the segment timer starts now.
-// With it, the clock starts at the first split: clock_start sets
-// level.game_start_time for the checkpoint, then the running row appears.
+// Without clock_start the run clock (level.game_start_time) is already running.
+// With it, the clock starts at the first split or when the start condition is
+// met (shared_segment_clock_go): clock_start sets level.game_start_time, then the
+// running row appears.
+// The segment timer (top) starts only at a staff craft or at the fire link button
+// in a robot's head during Rain Fire (user, 2026-11-02), never at load or release.
 shared_segment_timer(start_split, clock_start)
 {
     level endon("end_game");
@@ -654,21 +685,13 @@ shared_segment_timer(start_split, clock_start)
     timer_segment_hud(level.timer["segment"]);
     level thread shared_segment_end();
 
-    if(!isdefined(clock_start))
-    {
-        level thread shared_segment_running();
-        level.segment_start_time = gettime();
-        level.timer["segment"] settimerup(0);
-    }
+    if(!isdefined(clock_start)) level thread shared_segment_running();
 
-    // Ending start: every staff is already crafted, so the run clock starts now
-    // and the only row is the live Freedom one.
+    // Ending start: every staff is already crafted, so no split starts the
+    // clock (its start condition does) and the only row is the live Freedom one.
     if(start_split == SPLIT_FREEDOM)
     {
         level.segment_row = 0;
-        level.segment_clock_started = true;
-        [[ clock_start ]]();
-        level thread shared_segment_running();
         shared_segment_ending_timer();
         return;
     }
@@ -706,14 +729,19 @@ shared_segment_ending_timer()
     level.timer["segment"] settimerup(0);
 }
 
+// Starts the run clock and its live row, once: at the first split or when the
+// start condition is met. The segment timer waits for a craft or the fire link.
+shared_segment_clock_go()
+{
+    if(level.segment_clock_started) return;
+    level.segment_clock_started = true;
+    [[ level.segment_clock_start ]]();
+    level thread shared_segment_running();
+}
+
 shared_segment_split(split)
 {
-    first = !level.segment_clock_started;
-    if(first)
-    {
-        level.segment_clock_started = true;
-        [[ level.segment_clock_start ]]();
-    }
+    shared_segment_clock_go();
 
     // A hidden split (Timer menu) gets no row; see split_shown.
     if(split_shown(split))
@@ -734,7 +762,26 @@ shared_segment_split(split)
         level.segment_start_time = gettime();
         level.timer["segment"] settimerup(0);
     }
-    if(first) level thread shared_segment_running();
+}
+
+// A split row for the run clock's start (segment.start_split_label, like
+// "^4CODE ENTER ^7"), showing the start time. It takes the row of the split just
+// before the mode's first one (that split is behind), so later rows stay where
+// they are in every mode.
+shared_segment_start_row(label)
+{
+    row = level.segment_row - 1;
+    if(row < 0)
+    {
+        row = level.segment_row;
+        level.segment_row++;
+    }
+    hud = createServerFontString("default", 1.4);
+    hud.sort = 2000;
+    hud.hidewheninmenu = 0;
+    hud hud_set_point("TOPLEFT", "TOPLEFT", -63, 75 + row * 16);
+    hud setTextUnlimited(label + game_time_string());
+    timer_main_hud(hud);
 }
 
 // Live time for the next split, one row below the last recorded split.
@@ -759,7 +806,7 @@ shared_segment_end()
     level waittill("end_game");
     // For the console log: what the final time was built from.
     offset = 0;
-    if(isdefined(level.segment_craft_seconds)) offset = level.segment_craft_seconds;
+    if(isdefined(level.segment_start_seconds)) offset = level.segment_start_seconds;
     print("O-Prac end of game: run clock " + game_time_string() + ", start offset " + offset + " s, Samantha released " + flag("ee_samantha_released"));
     if(!isdefined(level.segment_start_time)) return;
     segment = gettime() - level.segment_start_time;
@@ -882,8 +929,8 @@ shared_get_parts()
     plinth = getent("crystal_plinth4", "targetname");
     while(!isDefined(plinth.v_staff)) wait 0.05;
 
-    // Icestart and Ice code start set the plane and R2L parts.
-    icestart = level.gamemode == "icestart" || level.gamemode == "icecodestart";
+    // The Icestart route has settings for the plane and R2L parts.
+    icestart = level.segment.icestart_route;
 
 	self maps\mp\zombies\_zm_craftables::player_get_craftable_piece("elemental_staff_air", "upper_staff");
 	self maps\mp\zombies\_zm_craftables::player_get_craftable_piece("elemental_staff_air", "middle_staff");
@@ -966,10 +1013,13 @@ shared_craft_maxis_drone()
 // trackers below with replacefunc. shared_set_round marks everything planned
 // before a later start round as already happened.
 
-// Default for Full Game and every segment start: Templar II/III rounds random
-// (0); Templars I at gens 1-3, II and III at gens 2-5.
-shared_templar_defaults(settings_ar)
+// Default for Full Game and every segment start: Panzer 2/3 and Templar II/III
+// rounds random (0), Templars I at gens 1-3, II and III at gens 2-5.
+shared_schedule_defaults(settings_ar)
 {
+    settings_ar["panzer_2"] = 0;
+    settings_ar["panzer_3"] = 0;
+    settings_ar["mechz_delay"] = "0"; // Panzer AFD delay (shared_mechz_delay_text): random.
     settings_ar["temps_2_round"] = 0;
     settings_ar["temps_3_round"] = 0;
     for(i = 1; i < 7; i++)
@@ -1835,11 +1885,6 @@ shared_part_keys()
 	return array("maxis_body", "maxis_engine", "shield_gen2", "shield_gen3", "shield_nml");
 }
 
-shared_shield_keys()
-{
-	return array("shield_gen2", "shield_gen3", "shield_nml");
-}
-
 // The keys are also the gramophone piece names.
 shared_vinyl_keys()
 {
@@ -1885,21 +1930,14 @@ shared_item_collected(key)
 //   Windstart       Maxis Body, Maxis Engine, Maxis Drone crafted
 //   Firestart       Maxis Body, Maxis Engine, Maxis Drone crafted
 //   Lightningstart  Maxis Engine, Maxis Drone crafted
+//   Ending prac     Maxis Drone crafted
+//   100 Kills       Maxis Drone crafted (no setting: always crafted)
 // Shield parts are optional in every start. A crafted drone has all its parts.
 
+// The mode has a Maxis Drone setting (segment.drone_option).
 shared_drone_option()
 {
-    switch(level.gamemode)
-    {
-        case "windstart":
-        case "firestart":
-        case "lightningstart":
-        case "endingprac":
-        case "hundredkills":
-            return true;
-        default:
-            return false;
-    }
+    return isdefined(level.segment) && level.segment.drone_option;
 }
 
 shared_drone_crafted()
@@ -2034,88 +2072,72 @@ shared_zone_capture_powerup()
 /*##############################################################################
                               Segment menus
 ##############################################################################*/
-// Menus for every segment start (Ice, Wind, Fire, Lightning).
-shared_build_segment_menus(root)
-{
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
-        disc_turns = array("random", "0 turn", "1 turn", "2 turn", "3 turn");
-        if(level.gamemode == "icestart")
-        {
-            self shared_craft_time_menu(settings);
-            add_cfg_choice(settings, "Start Location", "start_loc", array("random", "floor", "mule"));
-            add_cfg_choice(settings, "Ice Disc Turn", "last_disc", disc_turns);
-            add_cfg_toggle(settings, "Skip First Disc", "skip_first_disc", "^2Yes", "^1No");
-            add_cfg_toggle(settings, "R2L Route", "r2l", "^2Yes", "^1No");
-            add_cfg_toggle(settings, "Early Gram", "early_gram", "^2yes", "^1no");
-            add_cfg_toggle(settings, "MP40 Tile Clue", "mp40_tile_clue", "^2Yes", "^1No");
-            // Cycle 1 Foot picks the second bunker door; only R2L has a choice.
-            if(get_cfg_int("r2l")) add_cfg_choice(settings, "Cycle 1 Foot", "trench_path", array("random", "gen2", "gen3"));
-            add_cfg_toggle(settings, "Auto round end", "auto_round_end");
-            create_option(settings, "Auto round end delay: ^3" + get_cfg_int("auto_round_end_delay") + "s", ::cfg_increment_int, "auto_round_end_delay", array(1, 10));
-            add_cfg_toggle(settings, "Peek Code", "peek_code", "^2Yes", "^1No");
-        }
-        else
-        {
-            self shared_craft_time_menu(settings);
-            // Start Location sits right under Custom Craft.
-            switch(level.gamemode)
-            {
-                case "windstart":      add_cfg_choice(settings, "Start Location", "wind_spawn", array("Craft", "Exit")); break;
-                case "firestart":      add_cfg_choice(settings, "Start Location", "fire_spawn", array("Craft", "Exit")); break;
-                case "lightningstart": add_cfg_choice(settings, "Start Location", "lightning_spawn", array("Craft", "Exit")); break;
-            }
-            // Trio skip: Firestart and Lightningstart only; Windstart always uses the round 12 trio.
-            if(level.gamemode != "windstart") add_cfg_toggle(settings, "Trio skip", "trioskip", "^2Yes", "^1No");
-            // Disc Turn is for the Craft start only: the Exit start keeps the normal disc scramble.
-            switch(level.gamemode)
-            {
-                case "windstart":
-                    add_cfg_choice(settings, "STG acquired", "stg_start", array("no", "yes", "papped"));
-                    if(get_cfg_int("wind_spawn") != 1) add_cfg_choice(settings, "Wind Disc Turn", "last_disc", disc_turns);
-                    add_cfg_toggle(settings, "Skip First Disc", "skip_first_disc", "^2Yes", "^1No");
-                    create_option(settings, "Start Round: ^3" + get_cfg_int("wind_start_round"), ::cfg_increment_int, "wind_start_round", array(11, 12));
-                    create_option(settings, "Ice prefills: ^3" + get_cfg_int("ice_souls"), ::cfg_increment_int, "ice_souls", array(0, 10));
-                    break;
-                case "firestart":
-                    add_cfg_choice(settings, "STG acquired", "stg_start", array("no", "yes", "papped"));
-                    create_option(settings, "Ice prefills: ^3" + get_cfg_int("ice_souls"), ::cfg_increment_int, "ice_souls", array(0, 10));
-                    if(get_cfg_int("fire_spawn") != 1) add_cfg_choice(settings, "Fire Disc Turn", "last_disc", disc_turns);
-                    add_cfg_toggle(settings, "Skip First Disc", "skip_first_disc", "^2Yes", "^1No");
-                    break;
-                case "lightningstart":
-                    add_cfg_choice(settings, "STG acquired", "stg_start", array("no", "yes", "papped"));
-                    if(get_cfg_int("lightning_spawn") != 1) add_cfg_choice(settings, "Lightning Disc Turn", "last_disc", disc_turns);
-                    add_cfg_toggle(settings, "Skip First Disc", "skip_first_disc", "^2Yes", "^1No");
-                    create_option(settings, "Zombies left: ^3" + shared_zombies_left_text("lightning_zombies"), ::cfg_increment_int, "lightning_zombies", array(0, 24));
-                    break;
-            }
-        }
+// Pieces of the segment starts' menus. Each start builds its own Settings menu
+// and then calls the ones that apply.
 
-    // Items with no location setting (shared_get_parts). Discs, Maxis and shield
-    // parts are collected through Part Locations and Vinyl Locations.
+// Settings rows several starts share. "Last Disc Turn" in every start (user,
+// 2026-11-02, asked for Wind): the one dial the shortcut leaves turned.
+shared_add_disc_turn_choice(menu)
+{
+    add_cfg_choice(menu, "Last Disc Turn", "last_disc", array("random", "0 turn", "1 turn", "2 turn", "3 turn"));
+}
+
+// "Start Location" row that steps through values in their listed order, so a
+// location added later (STG) can sit next to the one it is like.
+shared_add_location_choice(menu, key, values, labels)
+{
+    index = 0;
+    for(i = 0; i < values.size; i++)
+        if(values[i] == get_cfg_int(key)) index = i;
+    create_option(menu, "Start Location: ^3" + labels[index], ::shared_location_step, key, values);
+}
+
+shared_location_step(key, values)
+{
+    next = values[0];
+    for(i = 0; i + 1 < values.size; i++)
+        if(values[i] == get_cfg_int(key)) next = values[i + 1];
+    self cfg_set_int(key, next);
+}
+
+// STG start of a held staff start: the craft start at STG_START_ORIGIN, facing as
+// the Craft spot (craft_angles), with the dials as their scrambles left them.
+shared_segment_stg(segment, craft_angles)
+{
+    segment.spots = shared_start_spots(STG_START_ORIGIN, craft_angles, STG_START_ORIGIN, craft_angles);
+    segment.use_exit = false;
+    segment.disc_shortcut_gem = undefined;
+    segment.discs_untouched = true;
+}
+
+shared_add_stg_choice(menu)
+{
+    add_cfg_choice(menu, "STG acquired", "stg_start", array("no", "yes", "papped"));
+}
+
+// Items with no location setting (shared_get_parts). Discs, Maxis and shield
+// parts are collected through Part Locations and Vinyl Locations.
+shared_build_items_menu(root)
+{
     items = add_submenu(root, "items", "Items settings", "Items");
-        if(level.gamemode == "icestart")
+        if(level.segment.icestart_route)
         {
             add_cfg_toggle(items, "Plane Shot", "kill_plane");
             create_option(items, "Plane Part: " + cfgint_compare("plane_part", "^2collected", "^1disperse"), ::shared_plane_part_toggle);
         }
         if(shared_drone_option()) add_cfg_toggle(items, "Maxis Drone", "maxis_drone_crafted", "^2crafted", "^3not crafted");
-        if(level.gamemode == "icestart") add_cfg_toggle(items, "Fizz DT", "dt_start");
+        if(level.segment.icestart_route) add_cfg_toggle(items, "Fizz DT", "dt_start");
         add_cfg_toggle(items, "115 Reward", "headshot_reward");
+}
 
+// The menus after a staff start's own (Settings, Items): locations, discs,
+// relays, Templars, Panzers, robots and puzzle RNG.
+shared_build_segment_menus(root)
+{
     self shared_build_parts_menu(root);
     self shared_build_vinyls_menu(root);
     self shared_build_disc_menu(root);
-
-    relays = add_submenu(root, "relays", "Electric Relays", "Relays");
-        shared_add_relay_row(relays, "Spawn", "relay_start");
-        shared_add_relay_row(relays, "Gen2", "relay_tank");
-        shared_add_relay_row(relays, "Gen4", "relay_air");
-        shared_add_relay_row(relays, "Gen5", "relay_elec");
-        shared_add_relay_row(relays, "Middle", "relay_ruins");
-        shared_add_relay_row(relays, "Bot Church", "relay_ice");
-        shared_add_relay_row(relays, "Top Church", "relay_village");
-
+    self shared_build_relays_menu(root);
     self shared_build_templar_menu(root);
     self shared_build_panzer_menu(root);
     self shared_build_robot_menus(root, ::shared_segment_all_random_cycles, shared_robot_earliest_cycle());
@@ -2142,128 +2164,238 @@ shared_segment_all_random_cycles()
 }
 
 /*##############################################################################
-                              Craft time
+                              Start time
 ##############################################################################*/
-// Each start mode begins when a staff is crafted. The player picks what the run
-// clock should read at that moment, either from a list of presets or as a
-// custom minutes:seconds time.
+// A start sets the run clock to a picked time when a start condition is met:
+// the staff craft, the release, leaving the Crazy Place, ... The player picks
+// the time from a list of presets or as a custom minutes:seconds time.
 //
-// A mode describes its presets once, in its initialize function, BEFORE its cfg
-// is loaded:
+// A mode adds one entry per way its clock can start, in its initialize
+// function, BEFORE its cfg is loaded:
 //
-//     shared_craft_time_setup("12:30", "14:30", 5, "13:30");
+//     shared_start_time_add("craft", "craft", "Craft", "12:30", "14:30", 5, "13:30", 12, 20);
 //
-// Read it as: "presets from 12:30 to 14:30, every 5 seconds, 13:30 by default".
-// Everything else comes from those four values:
+// Read it as: "entry craft, starts on the staff craft, shown as Craft, presets
+// from 12:30 to 14:30 every 5 seconds, 13:30 by default, Custom minutes 12 to
+// 20". Conditions (shared_start_condition_wait):
 //
-//     shared_craft_time_defaults()     default cfg settings
-//     shared_craft_time_menu()         "Craft Time" option and Custom Craft menu
-//     shared_craft_time_start_clock()  run clock, robots, OOPA and despawn checks
+//     "craft"    the next staff craft (the first split)
+//     "release"  the held start's release
+//     "exit"     the player leaves the Crazy Place through a portal
+//     "portal"   the player is in any portal's teleport animation
+//     "button"   a robot head's fire link button is pressed (fire_link_enabled)
+//     "foot"     the player enters Odin's hatch foot
 //
-// The saved "craft_time" setting is a preset number, not a time: 0 is the first
-// preset (12:30), 1 the next (12:35), and so on.
+// With two or more entries the menu has "Clock starts" (cfg start_condition) to
+// pick one, and each entry keeps its own time. level.start_time_forced, a mode
+// function, can return an entry key that applies instead (the menu then hides
+// the choice). level.start_time_choices, a mode function, can return the entry
+// keys the current Start Location offers (a mode with several locations, each
+// with its own time): only those are picked from and listed.
 //
-// Custom Craft minutes stay within custom_min_minutes..custom_max_minutes. The
-// earliest possible craft also decides the first robot cycle the menus offer.
+// Saved settings: <cfg>_time is a preset number, not a time (0 is the first
+// preset, 1 the next, ...), plus custom_<cfg>, custom_<cfg>_minutes and
+// custom_<cfg>_seconds. The first entry's cfg is "craft" whatever its key, so
+// cfgs and save slots from before Start Time still load. The earliest time any
+// entry allows decides the first robot cycle the menus offer.
 
-shared_craft_time_setup(first_time, last_time, step_seconds, default_time, custom_min_minutes = 0, custom_max_minutes = 59)
+shared_start_time_add(key, condition, label, first_time, last_time, step_seconds, default_time, custom_min_minutes = 0, custom_max_minutes = 59)
 {
+    if(!isdefined(level.start_times)) level.start_times = [];
     first_seconds = shared_time_text_to_seconds(first_time);
     last_seconds = shared_time_text_to_seconds(last_time);
 
-    level.craft_time = spawnstruct();
-    level.craft_time.first_seconds = first_seconds;
-    level.craft_time.step_seconds = step_seconds;
-    level.craft_time.preset_count = int((last_seconds - first_seconds) / step_seconds) + 1;
-    level.craft_time.default_seconds = shared_time_text_to_seconds(default_time);
-    level.craft_time.custom_min_minutes = custom_min_minutes;
-    level.craft_time.custom_max_minutes = custom_max_minutes;
+    entry = spawnstruct();
+    entry.key = key;
+    entry.condition = condition;
+    entry.label = label;
+    entry.cfg = key;
+    if(!level.start_times.size) entry.cfg = "craft"; // The craft_time keys of older cfgs.
+    entry.first_seconds = first_seconds;
+    entry.step_seconds = step_seconds;
+    entry.preset_count = int((last_seconds - first_seconds) / step_seconds) + 1;
+    entry.default_seconds = shared_time_text_to_seconds(default_time);
+    entry.custom_min_minutes = custom_min_minutes;
+    entry.custom_max_minutes = custom_max_minutes;
+    level.start_times[level.start_times.size] = entry;
 }
 
-// The earliest craft time any preset or Custom Craft setting allows, in seconds.
-shared_craft_time_earliest_seconds()
+// The forced entry key, or undefined when the player's choice applies.
+shared_start_time_forced_key()
 {
-    custom_seconds = level.craft_time.custom_min_minutes * 60;
-    if(custom_seconds < level.craft_time.first_seconds) return custom_seconds;
-    return level.craft_time.first_seconds;
+    if(!isdefined(level.start_time_forced)) return undefined;
+    return [[ level.start_time_forced ]]();
 }
 
-// Adds the craft time settings to a mode's default cfg.
-shared_craft_time_defaults(settings_ar)
+// The entries "Clock starts" picks from: level.start_time_choices, else all.
+shared_start_time_entries()
 {
-    default_seconds = level.craft_time.default_seconds;
-    default_preset = int((default_seconds - level.craft_time.first_seconds) / level.craft_time.step_seconds);
+    if(!isdefined(level.start_time_choices)) return level.start_times;
+    entries = [];
+    foreach(key in [[ level.start_time_choices ]]())
+        foreach(entry in level.start_times)
+            if(entry.key == key) entries[entries.size] = entry;
+    return entries;
+}
 
-    settings_ar["craft_time"] = default_preset;
-    settings_ar["custom_craft"] = 0;
-    settings_ar["custom_craft_minutes"] = shared_craft_time_custom_default_minutes();
-    settings_ar["custom_craft_seconds"] = default_seconds % 60;
+// The entry that applies: forced, else the "Clock starts" choice.
+shared_start_time()
+{
+    key = shared_start_time_forced_key();
+    if(isdefined(key))
+    {
+        foreach(entry in level.start_times)
+            if(entry.key == key) return entry;
+    }
+    entries = shared_start_time_entries();
+    index = get_cfg_int("start_condition");
+    if(index < 0 || index >= entries.size) index = 0; // Hand-edited cfg, or another location's choice.
+    return entries[index];
+}
+
+// The earliest time any entry's preset or Custom setting allows, in seconds.
+shared_start_time_earliest_seconds()
+{
+    earliest = undefined;
+    foreach(entry in level.start_times)
+    {
+        seconds = entry.first_seconds;
+        if(entry.custom_min_minutes * 60 < seconds) seconds = entry.custom_min_minutes * 60;
+        if(!isdefined(earliest) || seconds < earliest) earliest = seconds;
+    }
+    return earliest;
+}
+
+// Adds every entry's start time settings to a mode's default cfg.
+shared_start_time_defaults(settings_ar)
+{
+    settings_ar["start_condition"] = 0;
+    foreach(entry in level.start_times)
+    {
+        settings_ar[entry.cfg + "_time"] = int((entry.default_seconds - entry.first_seconds) / entry.step_seconds);
+        settings_ar["custom_" + entry.cfg] = 0;
+        settings_ar["custom_" + entry.cfg + "_minutes"] = shared_start_time_custom_default_minutes(entry);
+        settings_ar["custom_" + entry.cfg + "_seconds"] = entry.default_seconds % 60;
+    }
     return settings_ar;
 }
 
-// The default craft time's minutes, moved into the Custom Craft range.
-shared_craft_time_custom_default_minutes()
+// The entry's default time's minutes, moved into its Custom range.
+shared_start_time_custom_default_minutes(entry)
 {
-    minutes = int(level.craft_time.default_seconds / 60);
-    if(minutes < level.craft_time.custom_min_minutes) return level.craft_time.custom_min_minutes;
-    if(minutes > level.craft_time.custom_max_minutes) return level.craft_time.custom_max_minutes;
+    minutes = int(entry.default_seconds / 60);
+    if(minutes < entry.custom_min_minutes) return entry.custom_min_minutes;
+    if(minutes > entry.custom_max_minutes) return entry.custom_max_minutes;
     return minutes;
 }
 
-// The craft time the player picked, in seconds (13:20 is 800).
-shared_craft_time_seconds()
+// The start time the player picked for the entry that applies, in seconds
+// (13:20 is 800).
+shared_start_time_seconds()
 {
-    default_seconds = level.craft_time.default_seconds;
-
-    if(get_cfg_int("custom_craft"))
+    entry = shared_start_time();
+    if(get_cfg_int("custom_" + entry.cfg))
     {
-        minutes = get_cfg_int("custom_craft_minutes");
-        seconds = get_cfg_int("custom_craft_seconds");
-        if(minutes < level.craft_time.custom_min_minutes || minutes > level.craft_time.custom_max_minutes) minutes = shared_craft_time_custom_default_minutes();
-        if(seconds < 0 || seconds > 59) seconds = default_seconds % 60;
+        minutes = get_cfg_int("custom_" + entry.cfg + "_minutes");
+        seconds = get_cfg_int("custom_" + entry.cfg + "_seconds");
+        if(minutes < entry.custom_min_minutes || minutes > entry.custom_max_minutes) minutes = shared_start_time_custom_default_minutes(entry);
+        if(seconds < 0 || seconds > 59) seconds = entry.default_seconds % 60;
         return minutes * 60 + seconds;
     }
 
-    preset = get_cfg_int("craft_time");
-    if(preset < 0 || preset >= level.craft_time.preset_count) return default_seconds; // Hand-edited cfg.
-    return level.craft_time.first_seconds + preset * level.craft_time.step_seconds;
+    preset = get_cfg_int(entry.cfg + "_time");
+    if(preset < 0 || preset >= entry.preset_count) return entry.default_seconds; // Hand-edited cfg.
+    return entry.first_seconds + preset * entry.step_seconds;
 }
 
-// Adds "Craft Time" and the Custom Craft submenu to a mode's settings menu.
-shared_craft_time_menu(menu, label = "Craft Time")
+// Adds "Start Time" and the Custom submenu of the entry that applies, then
+// "Clock starts" (two or more entries, none forced), to a mode's settings menu.
+// Every mode calls it first, after its Start Location: Start Time and Custom
+// start time are right under it (user, 2026-11-02).
+shared_start_time_menu(menu)
 {
-    craft_text = shared_seconds_to_time_text(shared_craft_time_seconds());
-    create_option(menu, label + ": ^3 " + craft_text, ::shared_craft_time_next_preset);
+    entry = shared_start_time();
+    time_text = shared_seconds_to_time_text(shared_start_time_seconds());
+    create_option(menu, "Start Time (" + entry.label + "): ^3 " + time_text, ::shared_start_time_next_preset);
 
-    custom = add_submenu(menu, "custom_craft", "Custom " + tolower(label), "Custom " + label);
-        add_cfg_toggle(custom, "Enabled", "custom_craft");
-        create_option(custom, "Minutes: ^3" + get_cfg_int("custom_craft_minutes"), ::cfg_increment_int, "custom_craft_minutes", array(level.craft_time.custom_min_minutes, level.craft_time.custom_max_minutes));
-        create_option(custom, "Seconds: ^3" + get_cfg_int("custom_craft_seconds"), ::cfg_increment_int, "custom_craft_seconds", array(0, 59));
+    custom = add_submenu(menu, "custom_start", "Custom start time", "Custom Start Time");
+        add_cfg_toggle(custom, "Enabled", "custom_" + entry.cfg);
+        create_option(custom, "Minutes: ^3" + get_cfg_int("custom_" + entry.cfg + "_minutes"), ::cfg_increment_int, "custom_" + entry.cfg + "_minutes", array(entry.custom_min_minutes, entry.custom_max_minutes));
+        create_option(custom, "Seconds: ^3" + get_cfg_int("custom_" + entry.cfg + "_seconds"), ::cfg_increment_int, "custom_" + entry.cfg + "_seconds", array(0, 59));
+
+    entries = shared_start_time_entries();
+    if(entries.size > 1 && !isdefined(shared_start_time_forced_key()))
+    {
+        labels = [];
+        foreach(entry in entries) labels[labels.size] = entry.label;
+        add_cfg_choice(menu, "Clock starts", "start_condition", labels);
+    }
 }
 
-// Menu action for "Craft Time": turns Custom Craft off and moves to the next
-// preset. After the last preset it goes back to the first.
-shared_craft_time_next_preset()
+// Menu action for "Start Time": turns Custom off and moves to the next preset.
+// After the last preset it goes back to the first.
+shared_start_time_next_preset()
 {
-    level.mode_cfg["custom_craft"] = 0;
-    self cfg_increment_int("craft_time", array(0, level.craft_time.preset_count - 1));
+    entry = shared_start_time();
+    level.mode_cfg["custom_" + entry.cfg] = 0;
+    self cfg_increment_int(entry.cfg + "_time", array(0, entry.preset_count - 1));
 }
 
-// Call when the staff is crafted. Sets the run clock to the picked craft time and
-// lines the robots and the OOPA and despawn checks up with it.
+// Starts the segment timer and, for a condition other than the craft (which the
+// first split handles), waits for it on the player. Call on the player.
+shared_start_time_begin()
+{
+    level thread shared_segment_timer(level.segment.split, ::shared_start_clock);
+    entry = shared_start_time();
+    if(entry.condition != "craft") self thread shared_start_condition_wait(entry.condition);
+}
+
+// Waits for the start condition, then starts the run clock. "release" starts
+// it at once (called at the release).
+shared_start_condition_wait(condition)
+{
+    level endon("end_game");
+    self endon("disconnect");
+    switch(condition)
+    {
+        case "exit":
+            // stargate_teleport_player sets teleporting while the player still
+            // stands at the exit (the Crazy Place exit sends no notify).
+            while(!(is_true(self.teleporting) && self maps\mp\zm_tomb_chamber::is_player_in_chamber())) wait 0.05;
+            break;
+        case "portal":
+            // stargate_teleport_player sets it for the whole teleport, in or out.
+            while(!is_true(self.teleporting)) wait 0.05;
+            break;
+        case "button":
+            // activate_fire_link sets it on a press during the three robot round.
+            flag_wait("fire_link_enabled");
+            break;
+        case "foot":
+            // The foot stomp sets it to the robot id (Odin is 0) as it takes them up.
+            while(!(isdefined(self.in_giant_robot_head) && self.in_giant_robot_head == ROBOT_ODIN)) wait 0.05;
+            break;
+    }
+    shared_setup_trace("start condition " + condition + " met");
+    shared_segment_clock_go();
+    if(isdefined(level.segment.start_split_label)) shared_segment_start_row(level.segment.start_split_label);
+}
+
+// Sets the run clock to the picked start time and lines the robots (unless the
+// mode already sent them) and the OOPA and despawn checks up with it.
 // Robot timing follows the "Trio round 12" column of Robot Intervals.xlsx (the
 // standard). The "Trio skip" setting switches to the non-standard "No trios"
 // column; modes without that setting always use the standard.
-shared_craft_time_start_clock()
+shared_start_clock()
 {
     // Read the settings once, so every timing thread uses the same values.
-    craft_seconds = shared_craft_time_seconds();
-    round12_trio = !get_cfg_int("trioskip");
-    level.segment_craft_seconds = craft_seconds;
-    shared_robot_schedule(craft_seconds, round12_trio);
-    level.game_start_time = getTime() - craft_seconds * 1000;
-    print("O-Prac run clock started at " + craft_seconds + " s (game_start_time " + level.game_start_time + ", getTime " + getTime() + ")");
-    flag_set("start_robots");
+    start_seconds = shared_start_time_seconds();
+    level.segment_start_seconds = start_seconds;
+    robots_waiting = !flag("start_robots");
+    if(robots_waiting) shared_robot_schedule(start_seconds, !get_cfg_int("trioskip"));
+    level.game_start_time = getTime() - start_seconds * 1000;
+    print("O-Prac run clock started at " + start_seconds + " s (game_start_time " + level.game_start_time + ", getTime " + getTime() + ")");
+    if(robots_waiting) flag_set("start_robots");
 }
 
 // "13:20" -> 800
@@ -2311,7 +2443,7 @@ shared_robot_first_cycle(craft_seconds, round12_trio)
 // delays later cycles, so the standard schedule gives the earliest.
 shared_robot_earliest_cycle()
 {
-    return shared_robot_first_cycle(shared_craft_time_earliest_seconds(), true);
+    return shared_robot_first_cycle(shared_start_time_earliest_seconds(), true);
 }
 
 // Holds the robots until the first cycle that starts at or after the craft.
@@ -2369,9 +2501,10 @@ shared_starting_weapons()
     {
         self takeweapon("c96_zm");
         self maps\mp\zombies\_zm_weapons::weapon_give("c96_upgraded_zm", 1);
+        self shared_boomhilda_ammo();
     }
 
-    // "STG acquired" (Windstart on): the STG-44, plain or upgraded, instead.
+    // "STG acquired": the STG-44, plain or upgraded, instead.
     switch(get_cfg_int("stg_start"))
     {
         case STG_YES:    weapon = "mp44_zm"; break;
@@ -2382,24 +2515,226 @@ shared_starting_weapons()
         self giveWeapon(weapon, 0, self maps\mp\zombies\_zm_weapons::get_pack_a_punch_weapon_options(weapon));
     else
         self giveWeapon(weapon);
-    self maps\mp\zombies\_zm_weap_claymore::claymore_setup();
+    if(level.segment.claymore) self maps\mp\zombies\_zm_weap_claymore::claymore_setup();
     wait 0.05;
     self switchToWeapon(weapon);
+}
+
+// "Boomhilda ammo" and "Boomhilda clip": the upgraded Mauser's ammo at the start.
+// The total is clamped to what the weapon holds (clip size plus max stock, read
+// from the weapon). Full puts as much in the clip as fits, random rolls any
+// split the clip and stock can hold: a total above the max stock forces some
+// into the clip, a total below the clip size can all sit in the clip.
+shared_boomhilda_ammo()
+{
+    weapon = "c96_upgraded_zm";
+    clip_max = weaponclipsize(weapon);
+    stock_max = weaponmaxammo(weapon);
+
+    setting = get_cfg_int("boomhilda_ammo");
+    if(setting == BOOMHILDA_AMMO_RANDOM) total = randomint(clip_max + stock_max + 1);
+    else total = setting * BOOMHILDA_AMMO_STEP;
+    if(total > clip_max + stock_max) total = clip_max + stock_max;
+
+    clip_high = total;
+    if(clip_high > clip_max) clip_high = clip_max;
+    clip_low = total - stock_max;
+    if(clip_low < 0) clip_low = 0;
+    clip = clip_high;
+    if(get_cfg_int("boomhilda_clip") == BOOMHILDA_CLIP_RANDOM) clip = clip_low + randomint(clip_high - clip_low + 1);
+
+    self setweaponammoclip(weapon, clip);
+    self setweaponammostock(weapon, total - clip);
+    print("O-Prac: Boomhilda " + clip + " clip, " + (total - clip) + " stock (weapon holds " + clip_max + " + " + stock_max + ")");
+}
+
+shared_boomhilda_ammo_text()
+{
+    setting = get_cfg_int("boomhilda_ammo");
+    if(setting == BOOMHILDA_AMMO_RANDOM) return "random";
+    return "" + setting * BOOMHILDA_AMMO_STEP;
+}
+
+// Held starts from Ice code start on (the Mauser is upgraded at setup).
+shared_boomhilda_menu(settings)
+{
+    create_option(settings, "Boomhilda ammo: ^3" + shared_boomhilda_ammo_text(), ::cfg_increment_int, "boomhilda_ammo", array(0, BOOMHILDA_AMMO_RANDOM));
+    if(get_cfg_int("boomhilda_ammo") != 0) add_cfg_choice(settings, "Boomhilda clip", "boomhilda_clip", array("full", "random"));
+}
+
+shared_boomhilda_defaults(settings_ar)
+{
+    settings_ar["boomhilda_ammo"] = BOOMHILDA_AMMO_RANDOM - 1; // 150, full ammo as before the setting existed.
+    settings_ar["boomhilda_clip"] = BOOMHILDA_CLIP_FULL;
+    return settings_ar;
 }
 
 // Creates an element's Crazy Place exit, as entering through its portal does.
 shared_enable_chamber_exit(staff_index)
 {
-    entrance = undefined;
-    foreach(pad in getstructarray("trigger_teleport_pad", "targetname"))
-        if(pad.script_int == staff_index) entrance = pad;
-
+    entrance = shared_teleport_pad(staff_index);
     while(!isdefined(level.a_portal_exit_frames) || !isdefined(level.a_portal_exit_frames[staff_index])) wait 0.05;
     if(!isdefined(entrance.exit_enabled) || !entrance.exit_enabled)
     {
         entrance.exit_enabled = 1;
         level thread maps\mp\zm_tomb_teleporter::run_chamber_exit(staff_index);
     }
+}
+
+// An element's portal entrance struct. run_chamber_entrance_teleporter moves it
+// to the portal's middle once the portal is built.
+shared_teleport_pad(element)
+{
+    foreach(pad in getstructarray("trigger_teleport_pad", "targetname"))
+        if(pad.script_int == element) return pad;
+    return undefined;
+}
+
+/*##############################################################################
+                              Mode pieces shared by segment starts
+##############################################################################*/
+// Robot cycles and feet random, the Rain fire hatch on Odin, cycle tracker on.
+shared_robot_defaults(settings_ar, rain_foot)
+{
+    for(cycle = 1; cycle <= ROBOT_CYCLE_COUNT; cycle++)
+    {
+        settings_ar["cycle_" + cycle] = ROBOT_RANDOM;
+        settings_ar["foot_" + cycle] = FOOT_RANDOM;
+    }
+    settings_ar["rain_foot"] = rain_foot;
+    settings_ar["rain_robot"] = ROBOT_ODIN; // Rain Fire hatch robot (segment default).
+    settings_ar["cycle_tracker_ms"] = 0;
+    settings_ar["cycle_tracker"] = 1;
+    return settings_ar;
+}
+
+// Random discs for every scramble from first_scramble on (segment.first_scramble).
+shared_disc_defaults(settings_ar, first_scramble)
+{
+    for(scramble = first_scramble; scramble <= 4; scramble++)
+        settings_ar["disc_" + scramble] = 0;
+    return settings_ar;
+}
+
+// The Icestart route's round 10 (Icestart and Ice code start). R2L: the Gen 3
+// spawn door is open, the Gen 2 spawn door closed, and Cycle 1 Foot
+// (trench_path: 1 Gen 2, 2 Gen 3, 0 random) picks which second door is open.
+// Otherwise both Gen 3 doors are closed. The R2L route shows the AK chalk
+// (unless the B23R rolls) and needs one tank setup trip less.
+shared_icestart_route(segment)
+{
+    segment.icestart_route = true;
+    if(get_cfg_int("r2l"))
+    {
+        trench_path = get_cfg_int("trench_path");
+        if(trench_path == 0) trench_path = 1 + cointoss();
+        segment.excluded_doors = array(SPAWN_GEN2);
+        if(trench_path == 1) segment.excluded_doors[segment.excluded_doors.size] = GEN3;
+        else                 segment.excluded_doors[segment.excluded_doors.size] = GEN2;
+    }
+    else
+        segment.excluded_doors = array(GEN3, SPAWN_GEN3);
+    segment.wallbuy_ak = get_cfg_int("r2l");
+    segment.tank_trips = 2 - get_cfg_int("r2l");
+
+    segment.points_spent_claimed = false;
+    segment.perks = array("specialty_longersprint");
+    if(get_cfg_int("dt_start")) segment.perks[segment.perks.size] = "specialty_rof";
+    segment.perks[segment.perks.size] = "specialty_armorvest";
+    segment.kill_plane = get_cfg_int("kill_plane");
+    segment.tablet = ::shared_tablet_carried;
+    segment.disc_shortcut_gem = "crypt_gem_ice";
+}
+
+// tablet: picked up at the bunker and carried, still dirty (the Icestart route).
+shared_tablet_carried()
+{
+    while(!isDefined(level.n_tablets_remaining) || !isDefined(self.sq_one_inch_punch_stage)) wait 0.05;
+    self.sq_one_inch_punch_stage++;
+    self.sq_one_inch_punch_tablet_num = level.n_tablets_remaining;
+    self setclientfieldtoplayer( "player_tablet_state", 2 );
+    self thread maps\mp\zm_tomb_ee_side::sq_one_inch_punch_disconnect_watch();
+    self thread maps\mp\zm_tomb_ee_side::sq_one_inch_punch_death_watch();
+    m_tablet = getent( "tablet_bunker_" + level.n_tablets_remaining, "targetname" );
+    m_tablet delete();
+    level.n_tablets_remaining--;
+
+    self setclientfieldtoplayer( "player_tablet_state", 1 );
+    self.sq_one_inch_punch_stage = 4;
+    self thread maps\mp\zm_tomb_ee_side::tablet_cleanliness_thread();
+}
+
+// MP40 Tile Clue setting: the MP40 clip's last digit is the place, counted from
+// the low x side, of the tile the Ice gem shows first.
+shared_mp40_tile_clue()
+{
+    self endon("disconnect");
+    self endon("death");
+    level endon("ice_puzzle_1_complete");
+
+    if(!get_cfg_int("mp40_tile_clue")) return;
+
+    // The gem starts at -1: wait for the quest to select a tile.
+    answer = undefined;
+    while(!isdefined(answer) || !self hasweapon("mp40_zm"))
+    {
+        tiles = getentarray("ice_ceiling_tile", "script_noteworthy");
+        gem = getent("ice_chamber_gem", "targetname");
+        answer = undefined;
+        if(isdefined(gem) && isdefined(gem.value) && gem.value >= 0)
+        {
+            foreach(tile in tiles)
+                if(isdefined(tile.value) && tile.value == gem.value) answer = tile;
+        }
+        if(!isdefined(answer) || !self hasweapon("mp40_zm")) wait 0.05;
+    }
+
+    index = 1;
+    foreach(tile in tiles) if(tile.origin[0] < answer.origin[0]) index++;
+
+    ammo = self getweaponammoclip("mp40_zm");
+    ammo = ammo - ammo % 10 + index;
+    if(ammo > weaponclipsize("mp40_zm")) ammo -= 10;
+    self setweaponammoclip("mp40_zm", ammo);
+}
+
+// Easter egg step 3 done: the floor is gone, as vanilla watch_for_triple_attack
+// leaves it, and the mech fight can start.
+shared_open_ee_hole()
+{
+    flag_set("ee_mech_zombie_hole_opened");
+    floor = getent("easter_mechzombie_spawn", "targetname");
+    if(isDefined(floor)) floor delete();
+    hole = getent("fire_link_damage", "targetname");
+    if(isDefined(hole)) hole delete();
+}
+
+// "Zombies" setting of a start with a Round setting: the zombies left, kept
+// within 1 and the most the chosen round can have.
+shared_round_zombies_max(round_key)
+{
+    return practice_round_zombie_count(get_cfg_int(round_key));
+}
+
+shared_round_zombies(round_key, zombies_key)
+{
+    zombies = get_cfg_int(zombies_key);
+    max = shared_round_zombies_max(round_key);
+    if(zombies > max) zombies = max;
+    if(zombies < 1) zombies = 1;
+    return zombies;
+}
+
+shared_next_round_zombies(round_key, zombies_key)
+{
+    zombies = shared_round_zombies(round_key, zombies_key) + 1;
+    if(zombies > shared_round_zombies_max(round_key)) zombies = 1;
+    self cfg_set_int(zombies_key, zombies);
+}
+
+shared_add_round_zombies_option(menu, round_key, zombies_key)
+{
+    create_option(menu, "Zombies: ^3" + shared_round_zombies(round_key, zombies_key) + " ^7(" + shared_round_zombies_max(round_key) + ")", ::shared_next_round_zombies, round_key, zombies_key);
 }
 
 /*##############################################################################
@@ -2436,15 +2771,13 @@ shared_teleport_to_start(spots, use_exit)
 /*##############################################################################
                               Segment runner
 ##############################################################################*/
-// Every segment start (Icestart, Windstart, Firestart, Lightningstart) has the
-// same shape. Its file builds a segment description (<mode>_segment) and calls:
-//     initialize:  shared_segment_install(<mode>_segment())
-//     run:         level shared_run_segment(level.segment)
-// The description holds what differs as data (gems, perks, doors...) plus the
-// mode's own steps: setup (the map setup), start (setup, start spot, release
-// and run clock) and on_spawn (what happens as the player spawns). Starts that
-// hold the player while setup runs use shared_held_start; Icestart has its own
-// start because of Peek Code.
+// Every segment start has the same shape. Its file builds a segment description
+// (<mode>_segment) and its initialize calls shared_segment_install(<mode>_segment()).
+// Its registered run function is shared_run_segment. The description holds what
+// differs as data (gems, perks, doors...) plus the mode's own steps: setup (the
+// map setup), start (setup, start spot, release and run clock) and on_spawn
+// (what happens as the player spawns). Starts that hold the player while setup
+// runs use shared_held_start. Icestart has its own start because of Peek Code.
 
 // Game seconds (timescale 10: a tenth of that in real time) before a held start
 // whose setup has not finished releases the player anyway.
@@ -2458,23 +2791,34 @@ shared_segment()
     segment.staffs = [];                    // staffs the setup completes (shared_staff_install)
     segment.tank_trips = 2;                 // shared_tank_setup_trips
     segment.excluded_doors = undefined;     // doors left closed (shared_open_doors)
+    segment.open_mound = true;              // false: the mound stays closed for the player, with native timing
     segment.leave_gramophone = false;       // shared_open_mound
+    segment.generators = ::shared_generators; // the generator step after the black screen (undefined: none captured)
     segment.wallbuy_ak = false;             // shared_wallbuy_outlines
+    segment.box_rewards = true;             // false: no challenge is filled or claimed (shared_box_rewards), no One Inch Punch
     segment.points_spent_claimed = true;    // "points spent" box reward already claimed
+    segment.claymore = true;                // shared_starting_weapons gives claymores
     segment.perks = array("specialty_longersprint", "specialty_armorvest", "specialty_additionalprimaryweapon", "specialty_rof");
     segment.kill_plane = true;
     segment.panzer_spot = undefined;        // shared_prespawn_panzer
     segment.panzer_spot_wave = undefined;   // which Panzer (1 = first) panzer_spot is for
     segment.solved_relays = undefined;      // relay_* keys always solved (shared_relay_solved)
-    segment.tablet = ::shared_tablet_cleaned;
+    segment.tablet = ::shared_tablet_cleaned;   // undefined: left where the map puts it
     segment.score = 6500;                   // points on release
-    segment.clock_start = ::shared_craft_time_start_clock; // starts the run clock (shared_segment_timer)
-    segment.clock_at_release = false;       // true: clock_start runs at release, not at the first split (its staff is crafted already)
     segment.round_kills = undefined;        // instead of round_zombies: zombies of the round already killed
+    segment.round_zombies_keys = undefined; // instead of round_zombies: (round key, zombies key) of a "Zombies" setting (shared_round_zombies)
     segment.place_player = undefined;       // optional: the player's one move, just before release (held start)
+    segment.start_split_label = undefined;  // optional: a split row when the start condition starts the clock (shared_segment_start_row)
+    segment.start_time_before_place = false; // true: the start condition is watched from before place_player (a portal teleport there)
     segment.early_teleport = false;         // true: move to the start spot at spawn (a Panzer waits for them in the Crazy Place)
     segment.on_spawn = ::shared_hold_at_start;
     segment.start = ::shared_held_start;
+    segment.first_scramble = 1;             // first disc scramble still ahead (Mound discs menu)
+    segment.disc_shortcut_gem = undefined;  // crypt gem the first scramble lines up with (shared_disc_shortcut_gem)
+    segment.last_disc_aligned = false;      // true: the shortcut lines up the last dial too (no Last Disc Turn row)
+    segment.discs_untouched = false;        // true: the dials keep their scrambles, no shortcut, no Skip First Disc (shared_segment_stg)
+    segment.drone_option = false;           // the mode has a Maxis Drone setting (shared_drone_option)
+    segment.icestart_route = false;         // shared_icestart_route: Plane Part and R2L settings apply
     return segment;
 }
 
@@ -2486,7 +2830,9 @@ shared_segment_install(segment)
     flag_init("shared_tank_setup_done"); // Set when the setup trips are done.
     shared_schedules_init(11); // The route's skip pushes the first Templars to round 11.
     shared_segment_replacefuncs();
-    replacefunc( maps\mp\zm_tomb_main_quest::run_gramophone_door, ::shared_fast_mound_unlock );
+    shared_mechz_delay_install();
+    // The fast unlock shortens the opening: only for a mound the setup opens.
+    if(segment.open_mound) replacefunc( maps\mp\zm_tomb_main_quest::run_gramophone_door, ::shared_fast_mound_unlock );
     replacefunc( maps\mp\zm_tomb_quest_crypt::chamber_discs_randomize, ::shared_chamber_discs_randomize);
     if(segment.staffs.size) shared_staff_install(segment.staffs);
 
@@ -2495,16 +2841,17 @@ shared_segment_install(segment)
     level.delay_robot = true;
     level.zombie_round_start_delay = 0;
     level.n_disc_scrambles = 0; // Mound opening -> 1; each setup orb -> the next.
-    level.cycle_string = "awating robot cycle";
+    level.cycle_string = "awaiting run start"; // Until the run clock starts (user, 2026-11-02).
     level.start_timing["time_sting"] = "";
     level.start_timing["ms"] = 0;
     level.start_timing["cycle"] = 0;
 }
 
 // The shared startup: map state, rewards, loadout and the always-on threads,
-// then the mode's start.
-shared_run_segment(segment)
+// then the mode's start. Every segment start registers it as its run function.
+shared_run_segment()
 {
+    segment = level.segment;
     setDvar("timescale", 10);
     flag_wait("initial_players_connected");
     attaining27 = get_players()[0];
@@ -2513,18 +2860,21 @@ shared_run_segment(segment)
 
     //Map state
     level thread shared_open_doors(segment.excluded_doors);
-    level thread shared_open_mound(segment.leave_gramophone);
+    if(segment.open_mound) level thread shared_open_mound(segment.leave_gramophone);
     level thread shared_relays();
     level thread shared_wallbuy_outlines(segment.wallbuy_ak);
     level thread shared_unlock_gem(segment.gems);
 
     //Box rewards
-    if(get_cfg_int("headshot_reward"))
-        attaining27 thread shared_box_rewards("zc_headshots");
-    attaining27 thread shared_box_rewards("zc_boxes_filled", true);
-    attaining27 thread shared_box_rewards("zc_points_spent", segment.points_spent_claimed);
-    attaining27 thread shared_box_rewards("zc_zone_captures");
-    attaining27 thread maps\mp\zombies\_zm_weap_one_inch_punch::one_inch_punch_melee_attack();
+    if(segment.box_rewards)
+    {
+        if(get_cfg_int("headshot_reward"))
+            attaining27 thread shared_box_rewards("zc_headshots");
+        attaining27 thread shared_box_rewards("zc_boxes_filled", true);
+        attaining27 thread shared_box_rewards("zc_points_spent", segment.points_spent_claimed);
+        attaining27 thread shared_box_rewards("zc_zone_captures");
+        attaining27 thread maps\mp\zombies\_zm_weap_one_inch_punch::one_inch_punch_melee_attack();
+    }
 
     //Perks and guns
     attaining27 thread shared_perks(segment.perks);
@@ -2533,10 +2883,10 @@ shared_run_segment(segment)
     flag_wait("initial_blackscreen_passed");
     shared_setup_trace("blackscreen passed");
     flag_set("menu_active");
-    level thread shared_generators();
+    if(isdefined(segment.generators)) level thread [[ segment.generators ]]();
     if(segment.kill_plane) attaining27 thread shared_kill_plane();
     attaining27 thread shared_shovel();
-    attaining27 thread [[ segment.tablet ]]();
+    if(isdefined(segment.tablet)) attaining27 thread [[ segment.tablet ]]();
     attaining27 thread shared_pointbased_drops();
 
     attaining27 [[ segment.start ]]();
@@ -2545,8 +2895,8 @@ shared_run_segment(segment)
 /*##############################################################################
                               Held start
 ##############################################################################*/
-// Windstart, Firestart and Lightningstart: the player waits frozen on the start
-// spot while setup runs at timescale 10 and is released on the segment round.
+// Every segment start but Icestart: the player waits frozen on the start spot
+// while setup runs at timescale 10 and is released on the segment round.
 // The mode's description sets spots (shared_start_spots), use_exit, round and
 // round_zombies (shared_set_round).
 
@@ -2581,6 +2931,12 @@ shared_held_start_round()
     {
         flag_wait("initial_players_connected");
         zombies = practice_round_zombie_count(level.segment.round) - level.segment.round_kills;
+    }
+    else if(isdefined(level.segment.round_zombies_keys))
+    {
+        flag_wait("initial_players_connected");
+        keys = level.segment.round_zombies_keys;
+        zombies = shared_round_zombies(keys[0], keys[1]);
     }
     shared_set_round(level.segment.round, zombies);
     // Spawning resumes when the player is released; release waits for this so
@@ -2639,18 +2995,15 @@ shared_held_start()
     setDvar("timescale", 1);
     wait 0.5; // Normal speed for 500 ms before anything is released.
     level thread shared_refresh_disc_lights();
+    // place_player blocks through a portal teleport (about 2.5 s): a "portal"
+    // condition has to be watched before it starts.
+    if(level.segment.start_time_before_place) self shared_start_time_begin();
     if(isdefined(level.segment.place_player)) self [[ level.segment.place_player ]]();
 
     self.score = level.segment.score;
 
     flag_set("spawn_zombies");
-    clock_start = level.segment.clock_start;
-    if(level.segment.clock_at_release)
-    {
-        [[ clock_start ]]();
-        clock_start = undefined; // shared_segment_timer: the clock is running.
-    }
-    level thread shared_segment_timer(level.segment.split, clock_start);
+    if(!level.segment.start_time_before_place) self shared_start_time_begin(); // A "release" start condition starts the run clock now.
     level.segment_setup_running = undefined; // An open Crazy Place exit starts its 20 seconds.
     flag_set("segment_ready");
     if(get_cfg_int("cycle_tracker")) level thread shared_cycle_tracker();

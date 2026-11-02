@@ -24,6 +24,23 @@
 #define ICE        4
 
 /*##############################################################################
+                              Start spots used by several modes
+##############################################################################*/
+// Origin and view angles. Craft: the excavation floor, facing that staff.
+// Exit: just outside that element's Crazy Place exit.
+#define CRAFT_WIND_ORIGIN       (-118.34, 157.932, -751.875)
+#define CRAFT_WIND_ANGLES       (13.902, 129.183, 0)
+#define CRAFT_LIGHTNING_ORIGIN  (50.0612, 199.082, -751.875)
+#define CRAFT_LIGHTNING_ANGLES  (11.5839, 79.2444, 0)
+#define EXIT_WIND_ORIGIN        (11234, -8687.25, -407.875)
+#define EXIT_WIND_ANGLES        (0.0976524, 302.888, 0)
+#define EXIT_LIGHTNING_ORIGIN   (9633.01, -6973.31, -345.875)
+#define EXIT_LIGHTNING_ANGLES   (359.462, 139.132, 0)
+// STG: the STG start of every staff start (user, 2026-11-02), facing as that
+// mode's Craft spot until real angles are given.
+#define STG_START_ORIGIN        (-24, 195, -207)
+
+/*##############################################################################
                               Robot cycle and foot values
 ##############################################################################*/
 #define ROBOT_RANDOM -1
@@ -35,6 +52,14 @@
 #define FOOT_RANDOM  -1
 #define FOOT_LEFT     0
 #define FOOT_RIGHT    1
+
+/*##############################################################################
+                              Staff puzzle order (puzzle_rng_install)
+##############################################################################*/
+#define PUZZLE_RNG_ICE      1
+#define PUZZLE_RNG_WIND     2
+#define PUZZLE_RNG_FIRE     3
+#define PUZZLE_RNG_CHAMBER  4
 
 /*##############################################################################
                               Craftable part locations
@@ -93,3 +118,11 @@
 #define STG_NO      0   // MP40
 #define STG_YES     1   // STG-44 instead of the MP40
 #define STG_PAPPED  2   // Upgraded STG-44 instead of the MP40
+
+/*##############################################################################
+                              Boomhilda ammo (held starts, "boomhilda_ammo", "boomhilda_clip")
+##############################################################################*/
+#define BOOMHILDA_AMMO_STEP    10  // The setting steps the total ammo by this much.
+#define BOOMHILDA_AMMO_RANDOM  16  // Setting index past 150: a random total.
+#define BOOMHILDA_CLIP_FULL    0   // As much of the total in the clip as fits.
+#define BOOMHILDA_CLIP_RANDOM  1   // Any split of the total the clip and stock can hold.

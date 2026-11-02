@@ -18,11 +18,11 @@
 // mode dvar are the ones O-Practice always used.
 shared_practice_map()
 {
-    map = practice_map("Huth's O-Practice", "Huth's Origins Practice Tool", "O_PRAC/", "o_menu_gamemode");
+    map = practice_map("Huth's O-Prac", "Huth's Origins Practice Tool", "O_PRAC/", "o_menu_gamemode");
     // Run splits in SPLIT_* order (oprac.gsh); Freedom, the last, always shows.
     map.split_names = array("nml", "ice", "wind", "fire", "lightning", "freedom");
     map.split_labels = array("NML", "Ice", "Wind", "Fire", "Lightning", "Freedom");
-    map.build_hud = ::shared_build_hud;
+    map.build_hud_top = ::shared_build_hud;
     map.build_cheats = ::shared_build_cheats;
     map.base_cfg_defaults = ::shared_base_cfg_defaults;
     map.say_command = ::shared_say_command;
@@ -63,8 +63,8 @@ shared_build_hud(hud)
 {
 	if(mode_has_robot_cycles())
 	{
-		add_cfg_toggle(hud, "Cycle display ms", "cycle_tracker_ms");
 		create_option(hud, "Cycle display: " + cfgint_compare("cycle_tracker"), ::shared_toggle_cycle_display);
+		add_cfg_toggle(hud, "Cycle display ms", "cycle_tracker_ms");
 	}
 }
 
@@ -185,30 +185,11 @@ give_gem(staff_id)
     self maps\mp\zombies\_zm_craftables::player_take_piece(piece);
 }
 
-// Ice, Wind, Fire and Lightning Start and the starts built on them: the modes that
-// call shared_segment_replacefuncs.
-mode_is_segment_start()
-{
-    switch(level.gamemode)
-    {
-        case "icestart":
-        case "icecodestart":
-        case "windstart":
-        case "firestart":
-        case "lightningstart":
-        case "endingprac":
-        case "hundredkills":
-        case "windbulbs":
-            return true;
-        default:
-            return false;
-    }
-}
-
 // Modes that replace the vanilla robot_cycling with shared_robot_cycling.
 mode_has_robot_cycles()
 {
-    return level.gamemode == "fullgame" || mode_is_segment_start();
+    // Every segment start (shared_segment_install sets level.segment) installs it.
+    return level.gamemode == "fullgame" || isdefined(level.segment);
 }
 
 /*##############################################################################
@@ -240,13 +221,8 @@ shared_build_disc_menu(parent)
 // Absolute scramble IDs match disc_N configuration keys and native orb progress.
 shared_first_scramble()
 {
-    switch(level.gamemode)
-    {
-        case "windstart":      return 2;
-        case "firestart":      return 3;
-        case "lightningstart": return 4;
-        default:               return 1;
-    }
+    if(isdefined(level.segment)) return level.segment.first_scramble;
+    return 1;
 }
 
 shared_build_templar_menu(parent)
@@ -315,13 +291,81 @@ shared_reset_locations(keys)
 	self refresh_menu();
 }
 
-// Returns the menu so a mode can add its own rows below the shared ones.
+// Returns the menu so a mode can add its own rows below the shared ones. The AFD
+// delay is in every mode with the Panzer menu (user, 2026-11-02).
 shared_build_panzer_menu(parent)
 {
 	panzer = add_submenu(parent, "panzer", "Panzer");
 		create_option(panzer, "Panzer 2: ^3" + cfgint_compare("panzer_2", get_cfg_int("panzer_2") + " rounder", "random"), ::shared_cycle_panzer, 2);
 		create_option(panzer, "Panzer 3: ^3" + cfgint_compare("panzer_3", get_cfg_int("panzer_3") + " rounder", "random"), ::shared_cycle_panzer, 3);
+		create_option(panzer, "Panzer AFD delay: ^3" + shared_mechz_delay_text(), ::shared_mechz_delay_step);
 	return panzer;
+}
+
+/*##############################################################################
+                              Panzer AFD delay
+##############################################################################*/
+// The EE mech fight (step 4) spawns 8 Panzers, at most 4 alive, waiting 0.5 to
+// 1 s between spawns. mechz_delay "0" keeps it random, "0.5" or "1" fixes it.
+// Installed by Full Game and every segment start (shared_segment_install).
+shared_mechz_delay_install()
+{
+	replacefunc( maps\mp\zm_tomb_ee_main_step_4::stage_logic, ::shared_mechz_stage_logic);
+}
+
+shared_mechz_delay_text()
+{
+	switch("" + get_cfg_float("mechz_delay"))
+	{
+		case "0.5": return "0.5s";
+		case "1": return "1s";
+		default: return "random";
+	}
+}
+
+shared_mechz_delay_step()
+{
+	switch("" + get_cfg_float("mechz_delay"))
+	{
+		case "0.5": level.mode_cfg["mechz_delay"] = "1"; break;
+		case "1": level.mode_cfg["mechz_delay"] = "0"; break;
+		default: level.mode_cfg["mechz_delay"] = "0.5"; break;
+	}
+	write_config(level.mode_cfg, level.mode_cfg_str);
+	self refresh_menu();
+}
+
+// Vanilla zm_tomb_ee_main_step_4 stage_logic with the spawn delay setting.
+shared_mechz_stage_logic()
+{
+/#
+    iprintln( level._cur_stage_name + " of little girl lost started" );
+#/
+    flag_wait( "ee_quadrotor_disabled" );
+    level thread maps\mp\zm_tomb_ee_main_step_4::sndee4music();
+
+    if ( !flag( "ee_mech_zombie_fight_completed" ) )
+    {
+        while ( level.ee_mech_zombies_spawned < 8 )
+        {
+            if ( level.ee_mech_zombies_alive < 4 )
+            {
+                ai = spawn_zombie( level.mechz_spawners[0] );
+                ai thread maps\mp\zm_tomb_ee_main_step_4::ee_mechz_spawn( level.ee_mech_zombies_spawned % 4 );
+                level.ee_mech_zombies_alive++;
+                level.ee_mech_zombies_spawned++;
+            }
+
+            //MODIFIED: the AFD delay setting, vanilla random when 0.
+            val = get_cfg_float("mechz_delay");
+            if(!val) wait( randomfloatrange( 0.5, 1 ) );
+            else wait val;
+        }
+    }
+
+    flag_wait( "ee_mech_zombie_fight_completed" );
+    wait_network_frame();
+    maps\mp\zombies\_zm_sidequests::stage_completed( "little_girl_lost", level._cur_stage_name );
 }
 
 // all_random_cycles is the "All random" action for Robot Cycles; Full Game's

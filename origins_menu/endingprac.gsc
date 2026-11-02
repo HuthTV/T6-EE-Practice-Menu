@@ -21,9 +21,7 @@
 // ending practice of various_origins_practice.gsc; the setup uses the same native
 // steps as the other segment starts (shared_complete_staff and friends).
 
-// Where the player waits, frozen, while the setup runs: the excavation floor.
-#define ENDING_HOLD_ORIGIN  (50.0612, 199.082, -751.875)
-#define ENDING_HOLD_ANGLES  (11.5839, 79.2444, 0)
+// The player waits, frozen, on the Lightning Craft spot while the setup runs.
 // Gen 5 start, facing the generator.
 #define ENDING_GEN5_ORIGIN  (-2618.15, 547.033, 213.615)
 #define ENDING_GEN5_ANGLES  (0, 180, 0)
@@ -31,11 +29,6 @@
 // hatch foot, left or right.
 #define ENDING_FOOT_LEFT_ORIGIN   (-1621.96, 655.648, 273.856)
 #define ENDING_FOOT_RIGHT_ORIGIN  (-2494, -358.133, 303.68)
-// Crazy Place exits for the Exit start (ending_exit: 0 Lightning, 1 Wind).
-#define ENDING_LIGHTNING_EXIT_ORIGIN  (9633.01, -6973.31, -345.875)
-#define ENDING_LIGHTNING_EXIT_ANGLES  (359.462, 139.132, 0)
-#define ENDING_WIND_EXIT_ORIGIN       (11234, -8687.25, -407.875)
-#define ENDING_WIND_EXIT_ANGLES       (0.0976524, 302.888, 0)
 #define ENDING_SPAWN_GEN5  0
 #define ENDING_SPAWN_HEAD  1
 #define ENDING_SPAWN_EXIT  2
@@ -47,10 +40,15 @@
 
 endingprac_initialize()
 {
-    // Start time presets: 28:00 to 30:30, every 5 seconds, 29:00 by default. A
-    // guess at the round 15 and 16 fire link time of a run: set it to the real one.
-    // Custom time: 26 to 34 minutes.
-    shared_craft_time_setup("28:00", "30:30", 5, "29:00", 26, 34);
+    // Start Time, 28:00 to 30:30 every 5 seconds, Custom 26 to 34 minutes. The
+    // clock starts at release (as before), on the fire link button in Odin's
+    // head, or on entering Odin's fastest or second fastest hatch foot. Every
+    // default is a guess (29:00 was the release's): set them to a run's times.
+    shared_start_time_add("release", "release", "Release", "28:00", "30:30", 5, "29:00", 26, 34);
+    shared_start_time_add("button", "button", "Button press", "28:00", "30:30", 5, "29:00", 26, 34);
+    shared_start_time_add("foot1", "foot", "Odin foot 1st", "28:00", "30:30", 5, "29:00", 26, 34);
+    shared_start_time_add("foot2", "foot", "Odin foot 2nd", "28:00", "30:30", 5, "29:00", 26, 34);
+    level.start_time_forced = ::endingprac_forced_start_time;
     mode_cfg_load("endingprac", endingprac_default_cfg());
     shared_segment_install(endingprac_segment());
     // The old ending practice kept Templars away until round 19.
@@ -59,34 +57,30 @@ endingprac_initialize()
     replacefunc( maps\mp\zombies\_zm_powerups::get_next_powerup, ::endingprac_get_next_powerup );
 }
 
-endingprac_run()
-{
-    level shared_run_segment(level.segment);
-}
-
 endingprac_segment()
 {
     segment = shared_segment();
     segment.split = SPLIT_FREEDOM;
     segment.round = get_cfg_int("ending_round");
-    segment.round_zombies = endingprac_zombies();
+    segment.round_zombies_keys = array("ending_round", "ending_zombies"); // Counted once the player is in.
     segment.staffs = array(ICE, WIND, FIRE, LIGHTNING);
     segment.gems = array(ICE, FIRE, WIND, LIGHTNING);
-    exit_origin = ENDING_LIGHTNING_EXIT_ORIGIN;
-    exit_angles = ENDING_LIGHTNING_EXIT_ANGLES;
+    // Exit start: ending_exit 0 the Lightning exit, 1 the Wind exit.
+    exit_origin = EXIT_LIGHTNING_ORIGIN;
+    exit_angles = EXIT_LIGHTNING_ANGLES;
     if(get_cfg_int("ending_exit") == 1)
     {
-        exit_origin = ENDING_WIND_EXIT_ORIGIN;
-        exit_angles = ENDING_WIND_EXIT_ANGLES;
+        exit_origin = EXIT_WIND_ORIGIN;
+        exit_angles = EXIT_WIND_ANGLES;
     }
-    segment.spots = shared_start_spots(ENDING_HOLD_ORIGIN, ENDING_HOLD_ANGLES, exit_origin, exit_angles);
+    segment.spots = shared_start_spots(CRAFT_LIGHTNING_ORIGIN, CRAFT_LIGHTNING_ANGLES, exit_origin, exit_angles);
     segment.use_exit = get_cfg_int("ending_spawn") == ENDING_SPAWN_EXIT;
     // Every relay is solved by this point of the route.
-    segment.solved_relays = array("relay_start", "relay_tank", "relay_air", "relay_elec", "relay_ruins", "relay_ice", "relay_village");
+    segment.solved_relays = shared_relay_keys();
+    segment.drone_option = true;
     segment.score = ENDING_SCORE;
     segment.setup = ::endingprac_setup;
     segment.place_player = ::endingprac_place_player;
-    segment.clock_start = ::endingprac_clock_start;
     return segment;
 }
 
@@ -116,7 +110,7 @@ endingprac_setup()
 
     // The staffs stay on their Crazy Place plinths; the robot heads count as done.
     flag_set("ee_all_staffs_placed");
-    if(get_cfg_int("ending_spawn") == ENDING_SPAWN_HEAD) endingprac_open_hole();
+    if(get_cfg_int("ending_spawn") == ENDING_SPAWN_HEAD) shared_open_ee_hole();
 }
 
 // Picks up the upgraded Fire staff through its native pickup trigger. The trigger
@@ -158,23 +152,13 @@ endingprac_take_fire_staff()
     shared_setup_trace("fire staff in hand: " + self hasWeapon(upgraded.weapname));
 }
 
-// The fire link step is done: the floor is gone (as vanilla watch_for_triple_attack
-// leaves it) and the mech fight can start.
-endingprac_open_hole()
-{
-    flag_set("ee_mech_zombie_hole_opened");
-    floor = getent("easter_mechzombie_spawn", "targetname");
-    if(isDefined(floor)) floor delete();
-    hole = getent("fire_link_damage", "targetname");
-    if(isDefined(hole)) hole delete();
-}
-
 // Called by the held start when the setup is done, before the player is released.
 endingprac_place_player()
 {
     // Powerup drops for the ending: the mech drops one and zombie blood is first.
     level.mechz_should_drop_powerup = 1;
     level.zombie_vars["zombie_powerup_drop_increment"] = ENDING_DROP_INCREMENT;
+    endingprac_start_robots();
 
     switch(get_cfg_int("ending_spawn"))
     {
@@ -230,12 +214,22 @@ endingprac_head_ignoreme()
     if(isDefined(self.teleport_initial_origin)) self.ignoreme = 1;
 }
 
-// Run clock: the picked start time, with the first robot cycle starting at once
-// (the old ending practice sent the robots straight away).
-endingprac_clock_start()
+// The robots walk from the release, whatever starts the run clock (a foot or
+// the button needs them walking): the first cycle starts at once, as the old
+// ending practice sent them. Scheduled on the picked start time.
+endingprac_start_robots()
 {
-    shared_craft_time_start_clock();
+    shared_robot_schedule(shared_start_time_seconds(), !get_cfg_int("trioskip"));
     level.segment_robot_wait = 0;
+    flag_set("start_robots");
+}
+
+// The Robot head start begins after the eject (the hole is open, no button or
+// foot is left): its clock always starts at release.
+endingprac_forced_start_time()
+{
+    if(get_cfg_int("ending_spawn") == ENDING_SPAWN_HEAD) return "release";
+    return undefined;
 }
 
 // Vanilla get_next_powerup; until the drone is retrieved every drop is zombie
@@ -265,43 +259,21 @@ endingprac_build_menu(root)
 {
     settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
         add_cfg_choice(settings, "Start Location", "ending_spawn", array("Gen 5", "Robot head", "Exit"));
+        self shared_start_time_menu(settings);
         if(get_cfg_int("ending_spawn") == ENDING_SPAWN_EXIT) add_cfg_choice(settings, "Exit", "ending_exit", array("Lightning", "Wind"));
         create_option(settings, "Round: ^3" + get_cfg_int("ending_round"), ::cfg_increment_int, "ending_round", array(15, 16));
-        create_option(settings, "Zombies: ^3" + endingprac_zombies() + " ^7(" + endingprac_zombies_max() + ")", ::endingprac_next_zombies);
-        add_cfg_choice(settings, "STG acquired", "stg_start", array("no", "yes", "papped"));
+        shared_add_round_zombies_option(settings, "ending_round", "ending_zombies");
+        shared_add_stg_choice(settings);
+        self shared_boomhilda_menu(settings);
         // The Exit start always has it at that exit's portal (Lightning or Wind).
         if(get_cfg_int("ending_spawn") != ENDING_SPAWN_EXIT) add_cfg_choice(settings, "Gramophone", "ending_gram", array("in hand", "Wind portal"));
         add_cfg_toggle(settings, "Maxis Drone", "maxis_drone_crafted", "^2crafted", "^3not crafted");
         create_option(settings, "Rain foot: ^3" + rain_foot_text(), ::cfg_increment_int, "rain_foot", array(FOOT_RANDOM, FOOT_RIGHT));
-        self shared_craft_time_menu(settings, "Start Time");
         add_cfg_toggle(settings, "Trio skip", "trioskip", "^2Yes", "^1No");
 
     self shared_build_panzer_menu(root);
     self shared_build_templar_menu(root);
     self shared_build_robot_menus(root, ::shared_segment_all_random_cycles, shared_robot_earliest_cycle(), false);
-}
-
-// Most zombies the chosen round can have.
-endingprac_zombies_max()
-{
-    return practice_round_zombie_count(get_cfg_int("ending_round"));
-}
-
-// Zombies remaining, kept within 1 and the round's maximum.
-endingprac_zombies()
-{
-    zombies = get_cfg_int("ending_zombies");
-    max = endingprac_zombies_max();
-    if(zombies > max) zombies = max;
-    if(zombies < 1) zombies = 1;
-    return zombies;
-}
-
-endingprac_next_zombies()
-{
-    zombies = endingprac_zombies() + 1;
-    if(zombies > endingprac_zombies_max()) zombies = 1;
-    self cfg_set_int("ending_zombies", zombies);
 }
 
 endingprac_default_cfg()
@@ -311,39 +283,19 @@ endingprac_default_cfg()
     settings_ar["ending_spawn"] = ENDING_SPAWN_HEAD;
     settings_ar["ending_exit"] = 0;     // Exit start: 0 Lightning exit, 1 Wind exit.
     settings_ar["ending_round"] = 16;
-    settings_ar["ending_zombies"] = 30; // Zombies left in the round; 0 the full round.
+    settings_ar["ending_zombies"] = 30; // Zombies left in the round (1 to the round's maximum).
     settings_ar["ending_gram"] = 1;     // 0 in hand, 1 placed at the Wind portal.
     settings_ar["stg_start"] = STG_PAPPED; // STG acquired: STG_NO, STG_YES or STG_PAPPED.
+    settings_ar = shared_boomhilda_defaults(settings_ar);
     settings_ar["trioskip"] = 0;
-    settings_ar = shared_craft_time_defaults(settings_ar);
+    settings_ar = shared_start_time_defaults(settings_ar);
     settings_ar = shared_part_defaults(settings_ar);
     settings_ar = shared_segment_item_defaults(settings_ar);
     settings_ar["maxis_drone_crafted"] = 1;
     settings_ar["headshot_reward"] = 0;
 
-    settings_ar["panzer_2"] = 0;
-    settings_ar["panzer_3"] = 0;
-
-    settings_ar["relay_start"] = 1;
-    settings_ar["relay_tank"] = 1;
-    settings_ar["relay_air"] = 1;
-    settings_ar["relay_elec"] = 1;
-    settings_ar["relay_ruins"] = 1;
-    settings_ar["relay_ice"] = 1;
-    settings_ar["relay_village"] = 1;
-
-    settings_ar = shared_templar_defaults(settings_ar);
-
-    // Robot cycles and feet
-    for(cycle = 1; cycle <= ROBOT_CYCLE_COUNT; cycle++)
-    {
-        settings_ar["cycle_" + cycle] = ROBOT_RANDOM;
-        settings_ar["foot_" + cycle] = FOOT_RANDOM;
-    }
-
-    settings_ar["rain_foot"] = FOOT_RANDOM;
-    settings_ar["rain_robot"] = ROBOT_ODIN; // Rain Fire hatch robot (segment default).
-    settings_ar["cycle_tracker_ms"] = 0;
-    settings_ar["cycle_tracker"] = 1;
+    settings_ar = shared_schedule_defaults(settings_ar);
+    settings_ar = shared_relay_defaults(settings_ar, true);
+    settings_ar = shared_robot_defaults(settings_ar, FOOT_RANDOM);
     return settings_ar;
 }

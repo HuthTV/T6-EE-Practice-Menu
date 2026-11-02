@@ -140,16 +140,18 @@ shared_fill_souls(staff_id, num_souls)
 // 12 s), so a setup starts them early (shared_portals_begin) and waits for them as
 // its last step (shared_portals_wait). The exit then stays open until the player
 // is released (shared_run_chamber_exit). take_gram: the gramophone comes back in
-// hand once the portal is open (the Craft starts).
-shared_portals_begin(element, open_exit, take_gram)
+// hand once the portal is open (the Craft starts). exit_element: the exit to
+// open when it is not the gramophone's element (Ice code start).
+shared_portals_begin(element, open_exit, take_gram, exit_element)
 {
+    if(!isdefined(exit_element)) exit_element = element;
     flag_clear("segment_portals_open");
-    self thread shared_portals_run(element, open_exit, take_gram);
+    self thread shared_portals_run(element, open_exit, take_gram, exit_element);
 }
 
-shared_portals_run(element, open_exit, take_gram)
+shared_portals_run(element, open_exit, take_gram, exit_element)
 {
-    if(open_exit) self thread shared_open_exit_portal(element);
+    if(open_exit) self thread shared_open_exit_portal(exit_element);
     shared_setup_trace("gramophone portal " + element);
     self shared_open_gramophone_portal(element);
     if(open_exit) flag_wait("segment_exit_open");
@@ -161,13 +163,6 @@ shared_portals_run(element, open_exit, take_gram)
 shared_portals_wait()
 {
     flag_wait("segment_portals_open");
-}
-
-// Both steps in one call, for a setup that has nothing to overlap them with.
-shared_open_portals(element, open_exit, take_gram = false)
-{
-    self shared_portals_begin(element, open_exit, take_gram);
-    self shared_portals_wait();
 }
 
 // Whether this mode's setup completes the staff (the list passed to

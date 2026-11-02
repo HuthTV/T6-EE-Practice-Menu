@@ -31,7 +31,7 @@ fullgame_initialize()
 	replacefunc( maps\mp\zombies\_zm_perk_random::get_weighted_random_perk, ::fullgame_get_weighted_random_perk);
 	replacefunc( maps\mp\zm_tomb_quest_crypt::chamber_discs_randomize, ::fullgame_chamber_discs_randomize);
 
-	replacefunc( maps\mp\zm_tomb_ee_main_step_4::stage_logic, ::fullgame_stage_logic);
+	shared_mechz_delay_install();
 
 	replacefunc( maps\mp\zombies\_zm_powerups::randomize_powerups, ::fullgame_randomize_powerups );
 	replacefunc( maps\mp\zombies\_zm_powerups::powerup_drop, ::fullgame_powerup_drop );
@@ -39,12 +39,14 @@ fullgame_initialize()
 	flag_init("fullgame_fist_of_iron_nuke_dropped");
 	flag_clear("fullgame_fist_of_iron_nuke_dropped");
 
-	level.cycle_string = "awating robot cycle";
+	level.cycle_string = "awaiting robot cycle";
 	level.first_dig_list = array("random", "bonus_points_player", "nuke", "double_points", "zombie_blood", "ballista_zm", "c96_zm", "870mcs_zm", "dsr50_zm", "srm1216_zm");
 	level.robot_cycle = 0;
 	level.n_disc_scrambles = 0; // First mound opening selects disc_1; each orb step selects the next.
 
-	puzzle_rng_install();
+	puzzle_rng_install(PUZZLE_RNG_ICE);
+	// Crazy Place visits of the route (user, 2026-11-02), Crazy Place Walls menu.
+	level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();
 	mode_cfg_load("fullgame", fullgame_default_cfg());
 	shared_schedules_init(10);
 }
@@ -105,12 +107,7 @@ fullgame_default_cfg()
 	settings_ar["foot_4"] = FOOT_LEFT;
 
 	settings_ar = shared_part_defaults(settings_ar);
-	settings_ar = shared_templar_defaults(settings_ar);
-
-	//panzer round - 0 random
-	settings_ar["panzer_2"] = 0;
-	settings_ar["panzer_3"] = 0;
-
+	settings_ar = shared_schedule_defaults(settings_ar);
 	settings_ar = puzzle_rng_defaults(settings_ar);
 
 	return settings_ar;
@@ -367,9 +364,7 @@ fullgame_build_menu(root)
 			add_cfg_choice(fizz, "Fizz 1", "fizz_1", perks);
 			add_cfg_choice(fizz, "Fizz 2", "fizz_2", perks);
 
-		panzer = self shared_build_panzer_menu(randomness);
-			create_option(panzer, "Panzer AFD delay: ^3" + fullgame_mechz_rain_text(), ::fullgame_mechz_rain_rng);
-			create_option(panzer, "-panzer blood", ::menu_not_implemented);
+		self shared_build_panzer_menu(randomness);
 
 		box = add_submenu(randomness, "box", "Mystery Box", "Box");
 			add_cfg_choice(box, "Location", "box_location", array("random", "gen 3", "gen 2"));
@@ -524,12 +519,13 @@ fullgame_preset_perfect(cfg)
 	cfg["box_hit_1"] = 0;
 	cfg["box_tier"] = 0;
 	cfg["box_location"] = 0;
-	cfg["fizz_2"] = 0;
-	cfg["fizz_1"] = 0;
-	cfg["fizz_location"] = 0;
+	// Wunderfizz at Gen 4, Double Tap then Stamin-Up (user, 2026-11-02).
+	cfg["fizz_2"] = 5;
+	cfg["fizz_1"] = 1;
+	cfg["fizz_location"] = 1;
 	cfg["fullgame_fist_of_iron_nuke"] = 0;
 	cfg["fullgame_first_powerup"] = 0;
-	return cfg;
+	return puzzle_rng_best(cfg);
 }
 
 // From the saved cfg fullgame_f4b_snowy.cfg (2026-10-29).
@@ -629,6 +625,7 @@ fullgame_preset_snowy(cfg)
 	cfg["fizz_location"] = 1;
 	cfg["fullgame_fist_of_iron_nuke"] = 1;
 	cfg["fullgame_first_powerup"] = 1;
+	cfg = puzzle_rng_best(cfg);
 	return fullgame_preset_early_feet(cfg);
 }
 
@@ -654,42 +651,6 @@ fullgame_preset_slushie(cfg)
 	cfg["cycle_6"] = 0; // odin
 	cfg["cycle_7"] = 1; // thor
 	return fullgame_preset_early_feet(cfg);
-}
-
-fullgame_mechz_rain_text()
-{
-	delay = "" + get_cfg_float("mechz_delay");
-
-	switch(delay)
-	{
-		case "0": return "random";
-		case "0.5": return "0.5s";
-		case "1": return "1s";
-		default: return "random";
-	}
-}
-
-fullgame_mechz_rain_rng()
-{
-	delay = "" + get_cfg_float("mechz_delay");
-
-	switch(delay)
-	{
-		case "0":
-			level.mode_cfg["mechz_delay"] = "0.5";
-			break;
-
-		case "0.5":
-			level.mode_cfg["mechz_delay"] = "1";
-			break;
-
-		case "1":
-			level.mode_cfg["mechz_delay"] = "0";
-			break;
-	}
-
-	write_config(level.mode_cfg, level.mode_cfg_str);
-	self refresh_menu();
 }
 
 //##############hud elements####################
@@ -1165,45 +1126,6 @@ fullgame_chamber_discs_randomize()
 		prev_disc_pos = dials[i - 1].position;
 	}
 	maps\mp\zm_tomb_quest_crypt::chamber_discs_move_all_to_position(discs);
-}
-
-fullgame_stage_logic()
-{
-/#
-    iprintln( level._cur_stage_name + " of little girl lost started" );
-#/
-    flag_wait( "ee_quadrotor_disabled" );
-    level thread maps\mp\zm_tomb_ee_main_step_4::sndee4music();
-
-    if ( !flag( "ee_mech_zombie_fight_completed" ) )
-    {
-        while ( level.ee_mech_zombies_spawned < 8 )
-        {
-            if ( level.ee_mech_zombies_alive < 4 )
-            {
-                ai = spawn_zombie( level.mechz_spawners[0] );
-                ai thread maps\mp\zm_tomb_ee_main_step_4::ee_mechz_spawn( level.ee_mech_zombies_spawned % 4 );
-                level.ee_mech_zombies_alive++;
-                level.ee_mech_zombies_spawned++;
-            }
-
-			val = get_cfg_float("mechz_delay");
-			if(!val)
-			{
-				wait( randomfloatrange( 0.5, 1 ) );
-			}
-			else
-			{
-				wait val;
-			}
-
-
-        }
-    }
-
-    flag_wait( "ee_mech_zombie_fight_completed" );
-    wait_network_frame();
-    maps\mp\zombies\_zm_sidequests::stage_completed( "little_girl_lost", level._cur_stage_name );
 }
 
 fullgame_randomize_powerups()

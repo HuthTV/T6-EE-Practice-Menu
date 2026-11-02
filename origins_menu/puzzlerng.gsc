@@ -4,47 +4,42 @@
 
 #include scripts\zm\utility_core\menu_base;
 #include scripts\zm\utility_core\menu_utility;
+#inline scripts\zm\origins_menu\oprac;
 
 /*##############################################################################
                               Staff puzzle RNG
 ##############################################################################*/
 // Settings that force the random parts of the staff puzzles. Each puzzle's RNG is
-// offered by the modes that still have it ahead:
-//   Ice code       Fullgame, Icestart, Ice code start
-//   Wind rings     Fullgame, Icestart, Ice code start, Windstart
-//   Fire torches   Fullgame, Icestart, Ice code start, Windstart, Firestart
-//   Crazy Place walls   Fullgame and every segment start
+// offered by the modes that still have it ahead, from the first puzzle the mode
+// passes to puzzle_rng_install (PUZZLE_RNG_* in oprac.gsh):
+//   Ice code       Fullgame, Icestart, Ice code start, Panzerstart
+//   Wind rings     the same, Windstart
+//   Fire torches   the same, Firestart
+//   Crazy Place walls   the same, Lightningstart
 // A mode calls puzzle_rng_install and puzzle_rng_defaults while it loads, and its
 // menu calls puzzle_rng_build_menus (Fullgame, inside its Randomness menu) or
 // puzzle_rng_build_root_menu (the segment starts, a Randomness menu of their own).
 // The puzzles read their settings when they start, so a change applies on restart.
 
+// Whether the mode still has this puzzle ahead (puzzle_rng_install).
 puzzle_rng_has(puzzle)
 {
-    // Ice code start is Icestart a little further on: the same puzzles are ahead.
-    if(level.gamemode == "icecodestart") return puzzle_rng_has_mode(puzzle, "icestart");
-    return puzzle_rng_has_mode(puzzle, level.gamemode);
-}
-
-puzzle_rng_has_mode(puzzle, gamemode)
-{
+    if(!isdefined(level.puzzle_rng_first)) return false;
     switch(puzzle)
     {
-        case "ice":
-            return gamemode == "fullgame" || gamemode == "icestart";
-        case "wind":
-            return gamemode == "fullgame" || gamemode == "icestart" || gamemode == "windstart";
-        case "fire":
-            return gamemode == "fullgame" || gamemode == "icestart" || gamemode == "windstart" || gamemode == "firestart";
-        case "chamber":
-            return gamemode == "fullgame" || gamemode == "icestart" || gamemode == "windstart" || gamemode == "firestart" || gamemode == "lightningstart";
+        case "ice":     return level.puzzle_rng_first <= PUZZLE_RNG_ICE;
+        case "wind":    return level.puzzle_rng_first <= PUZZLE_RNG_WIND;
+        case "fire":    return level.puzzle_rng_first <= PUZZLE_RNG_FIRE;
+        case "chamber": return level.puzzle_rng_first <= PUZZLE_RNG_CHAMBER;
     }
     return false;
 }
 
-// Load time: replaces the puzzles' random choices.
-puzzle_rng_install()
+// Load time, before the mode's cfg: first is the first puzzle still ahead
+// (PUZZLE_RNG_*). Replaces the random choices of that puzzle and the later ones.
+puzzle_rng_install(first)
 {
+    level.puzzle_rng_first = first;
     if(puzzle_rng_has("ice"))  replacefunc(maps\mp\zm_tomb_quest_ice::change_ice_gem_value, ::puzzle_rng_change_ice_gem_value);
     if(puzzle_rng_has("wind")) replacefunc(maps\mp\zm_tomb_quest_air::ceiling_ring_randomize, ::puzzle_rng_ceiling_ring_randomize);
     if(puzzle_rng_has("fire")) replacefunc(maps\mp\zm_tomb_quest_fire::fire_puzzle_2_init, ::puzzle_rng_fire_puzzle_2_init);
@@ -118,10 +113,9 @@ puzzle_rng_build_menus(parent)
             names = puzzle_rng_chamber_names();
             choices = array("none", names[0], names[1], names[2], names[3]);
             wall_keys = [];
-            for(visit = 1; visit <= puzzle_rng_visit_count(); visit++)
+            for(visit = puzzle_rng_first_visit(); visit <= puzzle_rng_visit_count(); visit++)
             {
-                title = "Visit " + visit;
-                page = add_submenu(walls, "chamber_visit_" + visit, title + puzzle_rng_visit_text(visit), title);
+                page = add_submenu(walls, "chamber_visit_" + visit, puzzle_rng_visit_row(visit) + puzzle_rng_visit_text(visit), puzzle_rng_visit_title(visit));
                     add_cfg_choice(page, "Clear staff", "chamber_v" + visit + "_a", choices);
                     add_cfg_choice(page, "Clear staff", "chamber_v" + visit + "_b", choices);
                 wall_keys[wall_keys.size] = "chamber_v" + visit + "_a";
@@ -157,8 +151,70 @@ puzzle_rng_build_menus(parent)
                 add_cfg_choice(fire, label, "fire_torch_" + group, names);
                 keys[keys.size] = "fire_torch_" + group;
             }
+            create_option(fire, "Optimal (7 5 3)", ::puzzle_rng_fire_set_optimal);
             create_option(fire, "All random", ::puzzle_rng_set_keys, keys, 0);
     }
+}
+
+// The optimal torches 7, 5 and 3 (user, 2026-11-02): 5 of the 11 / 5 pair, 7 of
+// 9 / 7 and 3 of 3 / 6, as candidates of the torch rows (1 based, row order). The
+// groups that have a choice are known once fire_puzzle_2_init ran (map load), so
+// before that cfg is returned unchanged.
+puzzle_rng_fire_optimal(cfg)
+{
+    if(!isdefined(level.puzzle_fire_sizes)) return cfg;
+    candidates = array(2, 2, 1);
+    row = 0;
+    for(group = 1; group <= 4; group++)
+    {
+        // Rows as the Fire Torches menu counts them.
+        if(level.puzzle_fire_sizes[group] < 2) continue;
+        if(row < candidates.size && level.puzzle_fire_sizes[group] == 2) cfg["fire_torch_" + group] = candidates[row];
+        row++;
+    }
+    return cfg;
+}
+
+puzzle_rng_fire_set_optimal()
+{
+    level.mode_cfg = puzzle_rng_fire_optimal(level.mode_cfg);
+    write_config(level.mode_cfg, level.mode_cfg_str);
+    self refresh_menu();
+}
+
+// The best staff puzzle RNG (Full Game presets other than Normal 29 rng, user
+// 2026-11-02): Ice code 1 6 5 4 3 2, every Wind ring 1 shot, the route's
+// Crazy Place walls, torches 7 5 3.
+puzzle_rng_best(cfg)
+{
+    cfg["ice_tile_1"] = 1;
+    for(tile = 2; tile <= 6; tile++) cfg["ice_tile_" + tile] = 8 - tile;
+    for(ring = 1; ring <= 4; ring++) cfg["wind_ring_" + ring] = 1;
+    cfg = puzzle_rng_route_walls(cfg);
+    return puzzle_rng_fire_optimal(cfg);
+}
+
+// The staffs each route visit clears (user, 2026-11-02), element numbers as the
+// walls settings (1 Fire, 2 Wind, 3 Lightning, 4 Ice, 0 none).
+puzzle_rng_route_walls(cfg)
+{
+    walls = array(
+        array(4, 3),    // 1 Ice gem: Ice, Lightning
+        array(4, 2),    // 2 Ice code: Ice, Wind
+        array(2, 1),    // 3 Wind gem: Wind, Fire
+        array(2, 0),    // 4 Wind puzzle: Wind
+        array(1, 2),    // 5 Fire gem: Fire, Wind
+        array(1, 2),    // 6 Fire kills: Fire, Wind
+        array(3, 1),    // 7 Fire place: Lightning, Fire
+        array(3, 4),    // 8 Piano: Lightning, Ice
+        array(1, 3),    // 9 Upgrade: Fire, Lightning
+        array(4, 3));   // 10 Raise hell: Ice, Lightning
+    for(visit = 1; visit <= walls.size; visit++)
+    {
+        cfg["chamber_v" + visit + "_a"] = walls[visit - 1][0];
+        cfg["chamber_v" + visit + "_b"] = walls[visit - 1][1];
+    }
+    return cfg;
 }
 
 // "All ..." rows: sets every key to value.
@@ -215,7 +271,7 @@ puzzle_rng_ice_random()
 // Vanilla change_ice_gem_value picks a random unsolved tile as the next answer. A
 // wrong shot flips every tile back, so the shot being asked for is the number of
 // tiles solved since then, plus one. Tiles are numbered by x, smallest first, the
-// way the MP40 tile clue counts them (icestart_mp40_index), so the numbers match
+// way the MP40 tile clue counts them (shared_mp40_tile_clue), so the numbers match
 // what runners already read. A shot with no setting, or whose tile is already
 // solved, picks randomly as vanilla does.
 puzzle_rng_change_ice_gem_value()
@@ -352,17 +408,58 @@ puzzle_rng_fire_puzzle_2_init()
 // A visit is one stay in the chamber: it starts when a player is inside and a
 // crystal has been picked up (vanilla changes no wall before that) and ends when
 // the chamber is empty. Visits are counted from 1 for the whole game. For each of
-// the first 8 the menu has two staffs to clear. The wall never lands on a cleared
+// the first 8 (or one per level.puzzle_rng_visit_labels) the menu has two staffs
+// to clear. The wall never lands on a cleared
 // staff during that visit; it goes between the others, so with two cleared it goes
 // back and forth between the other two. A visit with nothing cleared, and every
-// visit after the 8th, is vanilla random. The settings are read at every change,
+// visit after the last, is vanilla random. The settings are read at every change,
 // so a menu change applies at the next one.
 // Timing is vanilla: a change as soon as a visit starts if the last one is older
 // than its wait, otherwise when that wait ends. The one addition: if the wall left
 // from the last visit is a staff this visit clears, it changes at once.
+// The route's Crazy Place visits (user, 2026-11-02). Full Game and the segment
+// starts set level.puzzle_rng_visit_labels to these before their cfg loads.
+puzzle_rng_route_visit_labels()
+{
+    return array("Ice gem", "Ice code", "Wind gem", "Wind puzzle", "Fire gem", "Fire kills", "Fire place", "Piano", "Upgrade", "Raise hell");
+}
+
+// Segment starts, once their cfg is loaded: first is the first visit still ahead
+// (the walls menu starts there). inside: the player is released in the Crazy
+// Place, and that stay counts as the visit before first.
+puzzle_rng_set_first_visit(first, inside)
+{
+    level.puzzle_rng_first_visit = first;
+    level.puzzle_rng_visits_before = first - 1;
+    if(inside) level.puzzle_rng_visits_before--;
+}
+
+puzzle_rng_first_visit()
+{
+    if(isdefined(level.puzzle_rng_first_visit)) return level.puzzle_rng_first_visit;
+    return 1;
+}
+
 puzzle_rng_visit_count()
 {
+    if(isdefined(level.puzzle_rng_visit_labels)) return level.puzzle_rng_visit_labels.size;
     return 8;
+}
+
+// Row text "1. Ice gem" when the mode names its visits (set before its cfg
+// loads), else "Visit 1". Only the number takes the cursor colour: the ^7 keeps
+// the name and the cleared staffs' brackets and commas white (user, 2026-11-02).
+puzzle_rng_visit_row(visit)
+{
+    if(isdefined(level.puzzle_rng_visit_labels)) return visit + ".^7 " + level.puzzle_rng_visit_labels[visit - 1];
+    return "Visit " + visit + "^7";
+}
+
+// Title inside the visit's page: the visit's name, else "Visit 1".
+puzzle_rng_visit_title(visit)
+{
+    if(isdefined(level.puzzle_rng_visit_labels)) return level.puzzle_rng_visit_labels[visit - 1];
+    return "Visit " + visit;
 }
 
 puzzle_rng_chamber_names()
@@ -426,6 +523,7 @@ puzzle_rng_chamber_wall_change_randomly()
     level endon("stop_random_chamber_walls");
 
     visit = 0;
+    if(isdefined(level.puzzle_rng_visits_before)) visit = level.puzzle_rng_visits_before;
     inside = false;
     change_at = 0;
 
