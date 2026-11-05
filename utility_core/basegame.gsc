@@ -7,6 +7,7 @@
 #include scripts\zm\utility_core\menu_base;
 #include scripts\zm\utility_core\menu_utility;
 #include scripts\zm\utility_core\saveslots;
+#include scripts\zm\utility_core\splits;
 
 /*##############################################################################
                               Map descriptor and start-up
@@ -38,6 +39,8 @@ practice_map(menu_title, tool_name, cfg_dir, mode_dvar)
     map.cfg_dir = cfg_dir;           // Folder of every cfg file, like "O_PRAC/"
     map.mode_dvar = mode_dvar;       // Dvar holding the selected mode
     map.accent_color = (0.54, 0.17, 0.89);
+    map.cursor_color = (0.74, 0.56, 1);      // Lighter than the accent, so the bar stands out from the panel.
+    map.header_text_color = (1, 1, 1);       // Black on a light accent.
     return map;
 }
 
@@ -50,7 +53,7 @@ practice_main(map, version)
     // The B2EE timer's init skips itself when this is set (every map and mode).
     level.oprac_version = version;
 
-    setdvar("scr_allowFileIo", 1);
+    flag_init("menu_active");
     set_dvar_if_unset(map.mode_dvar, level.modes[0].name);
     level.mode = get_mode(getDvar(map.mode_dvar));
     level.gamemode = level.mode.name;
@@ -69,8 +72,10 @@ practice_init()
     level thread [[ level.mode.run ]]();
     level thread basegame_run();
     level thread on_player_connect_menu();
-    level.menu_title = level.practice_map.menu_title + " " + level.practice_version;
-    precacheshader( "lui_soldier" );	//Shader of menu bg
+    if(isDefined(level.practice_map.menu_icon)) precacheshader(level.practice_map.menu_icon);
+    // A release shows its version at start-up only, a dev build keeps it in the title.
+    level.menu_title = level.practice_map.menu_title;
+    if(level.practice_version == "DEV BUILD") level.menu_title += " " + level.practice_version;
 }
 
 on_player_connect_menu()
@@ -128,8 +133,8 @@ basegame_run()
     level thread say_command_monitor();
     flag_wait("initial_blackscreen_passed");
     iPrintLn( "^7" + level.practice_map.tool_name + " ^3" + level.practice_version );
-    if(menu_equipment_chord()) iPrintLn( "^7Press [^6[{+melee}]^7] + [^6[{+actionslot " + menu_chord_slot() + "}]^7] ^7To Open" );
-    else iPrintLn( "^7Press [^6[{+melee}]^7] + [^6[{+smoke}]^7] ^7To Open" );
+    if(menu_equipment_chord()) iPrintLn( "^7Press [^6[{+melee}]^7] + [^6[{+actionslot " + menu_chord_slot() + "}]^7] ^7to open" );
+    else iPrintLn( "^7Press [^6[{+melee}]^7] + [^6[{+smoke}]^7] ^7to open" );
     wait 1.8;
 
     level thread basegame_unitrigger_hud_monitor();
@@ -224,7 +229,7 @@ basegame_points_hud_monitor()
 
         if(!isDefined(level.point_based_hud))
         {
-            level.point_based_hud = createServerFontString("hudsmall", 1.4);
+            level.point_based_hud = createServerFontString("default", 1.4);
             level.point_based_hud.alignx = "left";
             level.point_based_hud.aligny = "middle";
             level.point_based_hud.horzalign = "right";
@@ -287,7 +292,7 @@ basegame_active_zones_hud_monitor()
         {
             if(!isDefined(hud))
             {
-                hud = createServerFontString("hudsmall", 1.2);
+                hud = createServerFontString("default", 1.2);
                 hud.alignx = "left";
                 hud.aligny = "top";
                 hud.horzalign = "left";
@@ -298,7 +303,7 @@ basegame_active_zones_hud_monitor()
                 hud.y = 30;
                 hud.hidewheninmenu = 1;
             }
-            new_text = "Active zones:";
+            new_text = "active zones:";
             zones = maps\mp\zombies\_zm_zonemgr::get_active_zone_names();
             if(isDefined(zones))
                 foreach(zone in zones)
@@ -633,8 +638,17 @@ say_command_monitor()
 		level waittill("say", message, player);
 		// Before the lowercasing below: slot names keep their case.
 		if(player saveslot_say_command(message)) continue;
+		if(player practice_time_say_command(tolower(message))) continue;
 		switch(tolower(message))
 		{
+			case "help":
+				player basegame_say_help();
+				break;
+
+			case "restart":
+				player set_gamemode(level.gamemode);
+				break;
+
 			case "max":
 				player give_drop("full_ammo");
 				break;
@@ -670,6 +684,14 @@ say_command_monitor()
                 break;
 		}
 	}
+}
+
+basegame_say_help()
+{
+	self iprintln("^3restart^7, ^3time^7, ^3save^7, ^3load^7, ^3slot");
+	line = "^3max^7, ^3insta^7, ^3nuke^7, ^3double^7, ^3points^7, ^3demi^7, ^3pap^7, ^3doors";
+	if(isDefined(level.practice_map.say_help)) line += level.practice_map.say_help;
+	self iprintln(line);
 }
 
 // Unitrigger HUD functions
@@ -718,8 +740,8 @@ basegame_unitrigger_hud_monitor()
                 {
                     record = spawnstruct();
                     record.player = player;
-                    record.hud = player createFontString("hudsmall", 1.1);
-                    record.hud setpoint("LEFT", "TOP", 12, 110);
+                    record.hud = player createFontString("default", 1.1);
+                    record.hud setpoint("RIGHT", "TOP", -12, 110); // Left of centre, clear of the menu panel.
                     record.text = "";
                     level.unitrigger_debug_huds[index] = record;
                 }
@@ -756,6 +778,7 @@ basegame_unitrigger_hud_game_end()
 basegame_unitrigger_debug_text()
 {
     trigger = level._unitriggers.trigger_pool[self getentitynumber()];
+    if(!isDefined(trigger)) return "^3Unit trigger: ^7none";
     status = "^7selected (inactive)";
     if(isDefined(trigger.thread_running) && trigger.thread_running) status = "^2active";
     name = "unnamed";
@@ -781,7 +804,7 @@ basegame_optional_hud_monitor()
         {
             if(!isdefined(level.zombie_counter_hud))
             {
-                level.zombie_counter_hud = createServerFontString("hudsmall", 1.3);
+                level.zombie_counter_hud = createServerFontString("default", 1.3);
                 level.zombie_counter_hud setpoint("LEFT", "CENTER", 60, 185);
                 level.zombie_counter_hud.label = &"remaining: ^1";
             }
@@ -796,7 +819,7 @@ basegame_optional_hud_monitor()
         {
             if(!isdefined(level.zombie_spawned_hud))
             {
-                level.zombie_spawned_hud = createServerFontString("hudsmall", 1.3);
+                level.zombie_spawned_hud = createServerFontString("default", 1.3);
                 level.zombie_spawned_hud setpoint("LEFT", "CENTER", 60, 200);
                 level.zombie_spawned_hud.label = &"spawned: ^1";
             }
@@ -911,7 +934,7 @@ basegame_update_zone_hud()
     }
     if(!isdefined(self.practice_zone_hud))
     {
-        self.practice_zone_hud = createfontstring("hudsmall", 1.3);
+        self.practice_zone_hud = createfontstring("default", 1.3);
         self.practice_zone_hud.horzalign = "left";
         self.practice_zone_hud.vertalign = "bottom";
         self.practice_zone_hud.alignx = "left";

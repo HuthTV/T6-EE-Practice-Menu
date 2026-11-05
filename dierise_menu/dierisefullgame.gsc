@@ -48,7 +48,7 @@ dierisefullgame_default_cfg()
 dierisefullgame_build_menu(root)
 {
     settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
-        add_cfg_choice(settings, "Building 3 elevators", "bldg3_elevators", array("random", "layout A", "layout B"));
+        add_cfg_choice(settings, "Building 3 Elevators", "bldg3_elevators", array("random", "A", "B"));
 
         parts = add_submenu(settings, "springpad", "Trample Steam Parts", "Trample Steam");
             foreach(part in dierisefullgame_springpad_parts())

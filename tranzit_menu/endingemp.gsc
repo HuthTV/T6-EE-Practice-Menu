@@ -55,8 +55,8 @@ endingemp_default_cfg()
 endingemp_build_menu(root)
 {
     settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
-        add_cfg_choice(settings, "Start light", "start_light", tranzit_light_labels());
-        create_option(settings, "Start round: ^3" + get_cfg_int("start_round"), ::cfg_increment_int, "start_round", array(2, 30));
+        add_cfg_choice(settings, "Start Light", "start_light", tranzit_light_labels());
+        create_option(settings, "Round: ^3" + get_cfg_int("start_round"), ::cfg_increment_int, "start_round", array(2, 30));
         tranzit_drop_menu(settings);
 }
 
@@ -75,7 +75,7 @@ endingemp_setup()
     iprintln("Ending setup: power");
     flag_set("power_on");
     while(!flag("endingemp_ready") && gettime() < deadline) wait 0.05;
-    if(!flag("endingemp_ready")) iprintln("^1Ending setup: Richtofen steps not set (deadline)");
+    if(!flag("endingemp_ready")) iprintln("^1Setup timed out: Richtofen steps not set");
 
     iprintln("Ending setup: round");
     while(level.round_number < get_cfg_int("start_round") && gettime() < deadline)

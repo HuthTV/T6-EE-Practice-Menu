@@ -37,10 +37,10 @@
 
 postice_initialize()
 {
-    // Start Times, in the portal: 13:00 to 15:30, every 5 seconds, 14:00 by
-    // default, Custom 12 to 20 minutes. Guesses: set them to the real ones.
-    shared_start_time_add("code_enter", "portal", "Portal", "13:00", "15:30", 5, "14:00", 12, 20);
-    shared_start_time_add("code_exit", "portal", "Portal", "13:00", "15:30", 5, "14:00", 12, 20);
+    // Start Times, in the portal, every 5 seconds: the Ice craft's until the real
+    // ones are known (user, 2026-11-05).
+    shared_start_time_add("code_enter", "portal", "Portal", ICE_CRAFT_MIN, ICE_CRAFT_MAX, 5, ICE_CRAFT_DEFAULT);
+    shared_start_time_add("code_exit", "portal", "Portal", ICE_CRAFT_MIN, ICE_CRAFT_MAX, 5, ICE_CRAFT_DEFAULT);
     level.start_time_choices = ::postice_start_time_choices;
     puzzle_rng_install(PUZZLE_RNG_ICE);
     level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();
@@ -72,6 +72,7 @@ postice_start_time_choices()
 postice_segment()
 {
     segment = shared_segment();
+    segment.required_items = shared_required_items(array(FIRE));
     // The Ice split is behind: the run clock starts in the portal on the Start
     // Time, and the next split is the Wind craft.
     segment.split = SPLIT_WIND;
@@ -169,13 +170,13 @@ postice_spots()
 ##############################################################################*/
 postice_build_menu(root)
 {
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
-        shared_add_location_choice(settings, "start_loc", array(POSTICE_LOC_ENTER, POSTICE_LOC_EXIT), array("ice code enter", "ice code exit"));
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
+        shared_add_location_choice(settings, "start_loc", array(POSTICE_LOC_ENTER, POSTICE_LOC_EXIT), array("code enter", "code exit"));
         self shared_start_time_menu(settings);
-        create_option(settings, "Zombies killed: ^3" + postice_kills() + " ^7(of " + practice_round_zombie_count(10) + ")", ::cfg_increment_int, "icecode_kills", array(0, POSTICE_KILLS_MAX));
+        create_option(settings, "Zombies Killed: ^3" + postice_kills() + " ^7(of " + practice_round_zombie_count(10) + ")", ::cfg_increment_int, "icecode_kills", array(0, POSTICE_KILLS_MAX));
         add_cfg_toggle(settings, "R2L Route", "r2l");
         // Cycle 1 Foot picks the second bunker door: only R2L has a choice.
-        if(get_cfg_int("r2l")) add_cfg_choice(settings, "Cycle 1 Foot", "trench_path", array("random", "gen2", "gen3"));
+        if(get_cfg_int("r2l")) add_cfg_choice(settings, "Cycle 1 Foot", "trench_path", array("random", "gen 2", "gen 3"));
 
     self shared_build_categories(root);
     self shared_boomhilda_menu("loadout");

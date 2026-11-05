@@ -81,7 +81,7 @@ on_player_spawned_gen()
         tped = 0;
         while(self fragbuttonpressed())
         {
-            // Not while melee is held or the menu is open: melee + frag opens the menu.
+            // Not while melee is held or the menu is open.
             if(tped == 0 && !self meleebuttonpressed() && !self menu_open())
             {
                 tped = 1;
@@ -95,7 +95,7 @@ on_player_spawned_gen()
 
 genprac_build_menu(root)
 {
-	gen_prac = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
+	gen_prac = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
 		gens = add_submenu(gen_prac, "gens", "Active Gens", "Gens");
 			create_option(gens, "Activate All", ::genprac_reset_all_gens);
 			add_cfg_toggle(gens, "Gen 1", "start_bunker");
@@ -104,7 +104,7 @@ genprac_build_menu(root)
 			add_cfg_toggle(gens, "Gen 4", "nml_right");
 			add_cfg_toggle(gens, "Gen 5", "nml_left");
 			add_cfg_toggle(gens, "Gen 6", "church");
-		add_cfg_choice(gen_prac, "G-Strike Throws", "teleport_throw", array("normal", "teleport to landing", "follow in flight"));
+		add_cfg_choice(gen_prac, "G-Strike Throws", "teleport_throw", array("normal", "teleport", "follow"));
 		if(get_cfg_int("teleport_throw") == THROW_FOLLOW) add_cfg_toggle(gen_prac, "Return After Landing", "throw_return");
 }
 
@@ -131,7 +131,7 @@ genprac_setup_map()
     zombies = get_round_enemy_array();
     if (isDefined(zombies))
     {
-        for (i = 0; i < zombies.size + 1; i++)
+        for (i = 0; i < zombies.size; i++)
             zombies[i] dodamage(zombies[i].health + 666, zombies[i].origin);
     }
 	flag_clear( "spawn_zombies" );

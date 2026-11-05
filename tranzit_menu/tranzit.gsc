@@ -17,7 +17,9 @@
 // (tranzitfullgame.gsc), Ending EMP (endingemp.gsc), Freeroam.
 tranzit_practice_map()
 {
-    map = practice_map("Huth's T-Practice", "Huth's TranZit Practice Tool", "T_PRAC/", "t_menu_gamemode");
+    map = practice_map("Huth's T-Prac", "Huth's TranZit Practice Tool", "T_PRAC/", "t_menu_gamemode");
+    map.cursor_color = (0.62, 0.82, 0.52);
+    map.header_text_color = (0, 0, 0);
     map.accent_color = (0.47, 0.6, 0.39); // Washed-out plastic battle green (user, 2026-11-04)
     // RPG PaP: the B2EE timer's TranZit fridge.
     victis_practice_map(map, "usrpg_upgraded_zm", ::tranzit_madeup_install);

@@ -28,10 +28,11 @@
 
 postfire_initialize()
 {
-    // Fire kills enter in the Lightning portal's teleport, torches on leaving
-    // the Crazy Place. Custom: 19 to 27 minutes. Guesses: set them to the real ones.
-    shared_start_time_add("kills", "portal", "Portal", "20:30", "22:30", 5, "21:50", 19, 27);
-    shared_start_time_add("torches", "exit", "Exit", "21:30", "23:30", 5, "22:40", 19, 27);
+    // Fire kills enter in the Lightning portal's teleport, torches on leaving the
+    // Crazy Place, every 5 seconds: the Fire craft's until the real ones are known
+    // (user, 2026-11-05).
+    shared_start_time_add("kills", "portal", "Portal", FIRE_CRAFT_MIN, FIRE_CRAFT_MAX, 5, FIRE_CRAFT_DEFAULT);
+    shared_start_time_add("torches", "exit", "Exit", FIRE_CRAFT_MIN, FIRE_CRAFT_MAX, 5, FIRE_CRAFT_DEFAULT);
     level.start_time_choices = ::postfire_start_time_choices;
     puzzle_rng_install(PUZZLE_RNG_FIRE);
     level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();
@@ -54,6 +55,7 @@ postfire_start_time_choices()
 postfire_segment()
 {
     segment = shared_segment();
+    segment.required_items = shared_required_items(array(LIGHTNING));
     // The Fire split is behind: a split on it would start the run clock at once,
     // ahead of the start condition. The next split is the Lightning craft.
     segment.split = SPLIT_LIGHTNING;
@@ -104,8 +106,8 @@ postfire_setup()
 
 postfire_build_menu(root)
 {
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
-        shared_add_location_choice(settings, "fire_spawn", array(POSTFIRE_LOC_KILLS, POSTFIRE_LOC_TORCHES), array("fire kills enter", "torches"));
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
+        shared_add_location_choice(settings, "fire_spawn", array(POSTFIRE_LOC_KILLS, POSTFIRE_LOC_TORCHES), array("kills enter", "torches"));
         self shared_start_time_menu(settings);
 
     self shared_build_categories(root);
@@ -113,7 +115,7 @@ postfire_build_menu(root)
     self shared_boomhilda_menu("loadout");
     self shared_add_item_rows("loadout");
     shared_add_ice_souls_row("puzzles");
-    add_cfg_toggle("special_ai", "Trio skip", "trioskip");
+    add_cfg_toggle("special_ai", "Trio Skip", "trioskip");
     self shared_build_segment_menus(false, true);
 }
 

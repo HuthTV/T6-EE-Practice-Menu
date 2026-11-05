@@ -265,7 +265,7 @@ shared_add_relay_row(menu, label, key)
 	if(shared_relay_forced(key))
 		create_option(menu, label + ": ^2solved ^7(route)", ::shared_relay_fixed);
 	else
-		add_cfg_toggle(menu, label, key, "^2solved", "^1unsolved");
+		add_cfg_toggle(menu, label, key, "^2solved", "^3unsolved");
 }
 
 shared_relay_fixed()
@@ -281,7 +281,7 @@ shared_relay_keys()
 
 shared_relay_labels()
 {
-	return array("Spawn", "Gen2", "Gen4", "Gen5", "Middle", "Bot Church", "Top Church");
+	return array("Spawn", "Gen 2", "Gen 4", "Gen 5", "Middle", "Bot Church", "Top Church");
 }
 
 shared_build_relays_menu(parent)
@@ -573,7 +573,6 @@ shared_set_round(target_round, remaining_zombies)
     if(isdefined(remaining_zombies)) first_live_round++;
     shared_schedule_catch_up(level.panzer_schedule, first_live_round);
     shared_schedule_catch_up(level.templar_schedule, first_live_round);
-    level.shared_templars_i_done = level.templar_schedule.count > 0; // Hides Templars I in the menu.
 
     practice_set_round(target_round, remaining_zombies);
 }
@@ -833,9 +832,9 @@ shared_cycle_tracker()
 {
     // The menu toggle and a mode's start can both create it; keep one.
     if(isdefined(level.cycle_display)) level.cycle_display destroy();
-    level.cycle_display = createServerFontString("default", 1.3);
-	level.cycle_display setpoint("LEFT", "LEFT", 5, -232);
-	level.cycle_display.alpha = 1;
+    level.cycle_display = createServerFontString("default", 1.2);
+	level.cycle_display setpoint("LEFT", "LEFT", 5, -233); // Level with the game's Musical Parts title.
+	level.cycle_display.alpha = .85;
 	level.cycle_display setTextUnlimited(level.cycle_string);
 }
 
@@ -1509,9 +1508,9 @@ shared_giant_robot_start_walk( n_robot_id, b_has_hatch ) // COPY: maps\mp\zm_tom
 
 shared_robot_cycle_string(starting, robot, decimals = 0)
 {
-    robots = array("odin", "thor", "freya", "trios");
+    robots = array("Odin", "Thor", "Freya", "Trios");
     level.cycle_string = game_time_string(get_cfg_int("cycle_tracker_ms"));
-    level.cycle_string = level.cycle_string + " | cycle " + level.robot_cycle + bool_compare_string(starting, " start", " end");
+    level.cycle_string = level.cycle_string + " | Cycle " + level.robot_cycle + bool_compare_string(starting, " Start", " End");
     level.cycle_string = level.cycle_string + " | " + robots[robot];
     if(isDefined(level.cycle_display))  level.cycle_display setTextUnlimited(level.cycle_string);
     print(level.cycle_string);
@@ -1920,9 +1919,41 @@ shared_part_collected_value(key)
 	return shared_part(key).locations.size;
 }
 
+// What a setup cannot finish without: the gramophone and master disc open the
+// mound, and each portal the setup opens needs its element's disc.
+shared_required_items(portal_elements)
+{
+	items = array("vinyl_player", "vinyl_master");
+	foreach(element in portal_elements)
+		items[items.size] = shared_portal_vinyl(element);
+	return items;
+}
+
+shared_portal_vinyl(element)
+{
+	switch(element)
+	{
+		case FIRE:      return "vinyl_fire";
+		case WIND:      return "vinyl_air";
+		case LIGHTNING: return "vinyl_elec";
+		default:        return "vinyl_ice";
+	}
+}
+
+// Setup needs this item, so it is collected whatever its setting says, old cfgs
+// and save slots included.
+shared_item_required(key)
+{
+	if(!isdefined(level.segment)) return false;
+	foreach(required in level.segment.required_items)
+		if(required == key) return true;
+	return false;
+}
+
 // A crafted drone has its body and engine whatever their settings say.
 shared_item_collected(key)
 {
+	if(shared_item_required(key)) return true;
 	if(shared_drone_crafted() && (key == "maxis_body" || key == "maxis_engine")) return true;
 	return get_cfg_int(key) == shared_part_collected_value(key);
 }
@@ -1934,7 +1965,7 @@ shared_item_collected(key)
 // facts). Location defaults (shared_segment_item_defaults) collect every disc and
 // Maxis part; the player sets one to a spot to leave it out.
 //   Pre-Ice, Post-Ice              Purple Disc, plane, R2L part, Maxis Body, Maxis Engine
-//   Pre-Wind, Pre-Fire, Post-Fire  Maxis Body, Maxis Engine, Maxis Drone crafted
+//   Pre-Wind, Post-Wind, Pre-Fire, Post-Fire  Maxis Body, Maxis Engine, Maxis Drone crafted
 //   Pre-Lightning, Post-Lightning  Maxis Engine, Maxis Drone crafted
 //   Ending prac                    Maxis Drone crafted
 //   Raise Hell                     Maxis Drone crafted (no setting: always crafted)
@@ -1969,19 +2000,19 @@ shared_part(key)
 			part.label = "Maxis Engine";
 			part.craftable = "equip_dieseldrone_zm";
 			part.piece = "engine";
-			part.locations = array("pack-a-punch", "gram", "scaffolding");
+			part.locations = array("PaP", "gram", "scaffolding");
 			break;
 		case "shield_gen2":
-			part.label = "Shield Gen2";
+			part.label = "Shield Gen 2";
 			part.craftable = "tomb_shield_zm";
 			part.piece = "bracket";
 			part.locations = array("claymore", "wheelbarrow", "footprint");
 			break;
 		case "shield_gen3":
-			part.label = "Shield Gen3";
+			part.label = "Shield Gen 3";
 			part.craftable = "tomb_shield_zm";
 			part.piece = "top";
-			part.locations = array("fire tunnel", "wheelbarrow", "ak74u");
+			part.locations = array("fire tunnel", "wheelbarrow", "AK74u");
 			break;
 		case "shield_nml":
 			part.label = "Shield NML";
@@ -1990,27 +2021,27 @@ shared_part(key)
 			part.locations = array("gen 4 box", "gen 4 side", "gen 5 side");
 			break;
 		case "vinyl_player":
-			part.label = "Gramophone";
+			part.label = "Gram";
 			part.locations = array("far", "close");
 			break;
 		case "vinyl_master":
-			part.label = "Master Disc";
+			part.label = "Master";
 			part.locations = array("wheelbarrow", "stairs", "backside");
 			break;
 		case "vinyl_ice":
-			part.label = "Ice Disc";
+			part.label = "Ice";
 			part.locations = array("relay", "mystery box", "table");
 			break;
 		case "vinyl_air":
-			part.label = "Wind Disc";
-			part.locations = array("lightning tunnel", "boxes", "stamina up");
+			part.label = "Wind";
+			part.locations = array("lightning tunnel", "boxes", "Stamin-Up");
 			break;
 		case "vinyl_fire":
-			part.label = "Fire Disc";
+			part.label = "Fire";
 			part.locations = array("church", "generator", "tank");
 			break;
 		case "vinyl_elec":
-			part.label = "Lightning Disc";
+			part.label = "Lightning";
 			part.locations = array("fizz", "wind tunnel", "chariot");
 			break;
 	}
@@ -2085,7 +2116,7 @@ shared_zone_capture_powerup()
 // 2026-11-02, asked for Wind): the one dial the shortcut leaves turned.
 shared_add_disc_turn_choice(menu)
 {
-    add_cfg_choice(menu, "Last Disc Turn", "last_disc", array("random", "0 turn", "1 turn", "2 turn", "3 turn"));
+    add_cfg_choice(menu, "Last Disc Turns", "last_disc", array("random", "0", "1", "2", "3"));
 }
 
 // "Start Location" row that steps through values in their listed order, so a
@@ -2095,6 +2126,7 @@ shared_add_location_choice(menu, key, values, labels)
     index = 0;
     for(i = 0; i < values.size; i++)
         if(values[i] == get_cfg_int(key)) index = i;
+    set_menu_tag(menu, labels[index]);
     create_option(menu, "Start Location: ^3" + labels[index], ::shared_location_step, key, values);
 }
 
@@ -2116,9 +2148,13 @@ shared_segment_stg(segment, craft_angles)
     segment.discs_untouched = true;
 }
 
-shared_add_stg_choice(menu)
+// always_acquired: the mode has no start without it (Raise Hell).
+shared_add_stg_choice(menu, always_acquired = false)
 {
-    add_cfg_choice(menu, "STG acquired", "stg_start", array("no", "yes", "papped"));
+    names = array("none", "plain", "PaP");
+    first = STG_NO;
+    if(always_acquired) first = STG_YES;
+    create_option(menu, "STG: ^3" + names[get_cfg_int("stg_start")], ::cfg_increment_int, "stg_start", array(first, STG_PAPPED));
 }
 
 // Items with no location setting (shared_get_parts). Discs, Maxis and shield
@@ -2128,7 +2164,7 @@ shared_add_item_rows(items)
     if(level.segment.ice_route)
     {
         add_cfg_toggle(items, "Plane Shot", "kill_plane");
-        create_option(items, "Plane Part: " + cfgint_compare("plane_part", "^2collected", "^1disperse"), ::shared_plane_part_toggle);
+        create_option(items, "Plane Part: " + cfgint_compare("plane_part", "^2collected", "^3not collected"), ::shared_plane_part_toggle);
     }
     if(shared_drone_option()) add_cfg_toggle(items, "Maxis Drone", "maxis_drone_crafted", "^2crafted", "^3not crafted");
     if(level.segment.ice_route) add_cfg_toggle(items, "Fizz DT", "dt_start");
@@ -2189,11 +2225,12 @@ shared_segment_all_random_cycles()
 // A mode adds one entry per way its clock can start, in its initialize
 // function, BEFORE its cfg is loaded:
 //
-//     shared_start_time_add("craft", "craft", "Craft", "12:30", "14:30", 5, "13:30", 12, 20);
+//     shared_start_time_add("craft", "craft", "Craft", "12:30", "14:30", 5, "13:30");
 //
 // Read it as: "entry craft, starts on the staff craft, shown as Craft, presets
-// from 12:30 to 14:30 every 5 seconds, 13:30 by default, Custom minutes 12 to
-// 20". Conditions (shared_start_condition_wait):
+// from 12:30 to 14:30 every 5 seconds, 13:30 by default". Custom runs from the
+// first preset to START_TIME_CUSTOM_SPAN after it, 12:30 to 22:30 here.
+// Conditions (shared_start_condition_wait):
 //
 //     "craft"    the next staff craft (the first split)
 //     "release"  the held start's release
@@ -2215,7 +2252,11 @@ shared_segment_all_random_cycles()
 // cfgs and save slots from before Start Time still load. The earliest time any
 // entry allows decides the first robot cycle the menus offer.
 
-shared_start_time_add(key, condition, label, first_time, last_time, step_seconds, default_time, custom_min_minutes = 0, custom_max_minutes = 59)
+// Custom start time ends this many seconds after an entry's first preset, in every
+// mode (user, 2026-11-05: always, until the user changes it).
+#define START_TIME_CUSTOM_SPAN  600
+
+shared_start_time_add(key, condition, label, first_time, last_time, step_seconds, default_time)
 {
     if(!isdefined(level.start_times)) level.start_times = [];
     first_seconds = shared_time_text_to_seconds(first_time);
@@ -2231,8 +2272,7 @@ shared_start_time_add(key, condition, label, first_time, last_time, step_seconds
     entry.step_seconds = step_seconds;
     entry.preset_count = int((last_seconds - first_seconds) / step_seconds) + 1;
     entry.default_seconds = shared_time_text_to_seconds(default_time);
-    entry.custom_min_minutes = custom_min_minutes;
-    entry.custom_max_minutes = custom_max_minutes;
+    entry.custom_last_seconds = first_seconds + START_TIME_CUSTOM_SPAN;
     level.start_times[level.start_times.size] = entry;
 }
 
@@ -2269,16 +2309,12 @@ shared_start_time()
     return entries[index];
 }
 
-// The earliest time any entry's preset or Custom setting allows, in seconds.
+// The earliest time any entry allows, in seconds: Custom starts at the first preset.
 shared_start_time_earliest_seconds()
 {
     earliest = undefined;
     foreach(entry in level.start_times)
-    {
-        seconds = entry.first_seconds;
-        if(entry.custom_min_minutes * 60 < seconds) seconds = entry.custom_min_minutes * 60;
-        if(!isdefined(earliest) || seconds < earliest) earliest = seconds;
-    }
+        if(!isdefined(earliest) || entry.first_seconds < earliest) earliest = entry.first_seconds;
     return earliest;
 }
 
@@ -2290,19 +2326,27 @@ shared_start_time_defaults(settings_ar)
     {
         settings_ar[entry.cfg + "_time"] = int((entry.default_seconds - entry.first_seconds) / entry.step_seconds);
         settings_ar["custom_" + entry.cfg] = 0;
-        settings_ar["custom_" + entry.cfg + "_minutes"] = shared_start_time_custom_default_minutes(entry);
+        settings_ar["custom_" + entry.cfg + "_minutes"] = int(entry.default_seconds / 60);
         settings_ar["custom_" + entry.cfg + "_seconds"] = entry.default_seconds % 60;
     }
     return settings_ar;
 }
 
-// The entry's default time's minutes, moved into its Custom range.
-shared_start_time_custom_default_minutes(entry)
+// seconds, moved into the entry's Custom range.
+shared_start_time_custom_clamp(entry, seconds)
 {
-    minutes = int(entry.default_seconds / 60);
-    if(minutes < entry.custom_min_minutes) return entry.custom_min_minutes;
-    if(minutes > entry.custom_max_minutes) return entry.custom_max_minutes;
-    return minutes;
+    if(seconds < entry.first_seconds) return entry.first_seconds;
+    if(seconds > entry.custom_last_seconds) return entry.custom_last_seconds;
+    return seconds;
+}
+
+// The entry's Custom time in seconds. The menu rows and the clock both read it, so
+// the rows show what the run gets, also for a saved time outside the range.
+shared_start_time_custom_time(entry)
+{
+    minutes = get_cfg_int("custom_" + entry.cfg + "_minutes");
+    seconds = get_cfg_int("custom_" + entry.cfg + "_seconds");
+    return shared_start_time_custom_clamp(entry, minutes * 60 + seconds);
 }
 
 // The start time the player picked for the entry that applies, in seconds
@@ -2310,14 +2354,7 @@ shared_start_time_custom_default_minutes(entry)
 shared_start_time_seconds()
 {
     entry = shared_start_time();
-    if(get_cfg_int("custom_" + entry.cfg))
-    {
-        minutes = get_cfg_int("custom_" + entry.cfg + "_minutes");
-        seconds = get_cfg_int("custom_" + entry.cfg + "_seconds");
-        if(minutes < entry.custom_min_minutes || minutes > entry.custom_max_minutes) minutes = shared_start_time_custom_default_minutes(entry);
-        if(seconds < 0 || seconds > 59) seconds = entry.default_seconds % 60;
-        return minutes * 60 + seconds;
-    }
+    if(get_cfg_int("custom_" + entry.cfg)) return shared_start_time_custom_time(entry);
 
     preset = get_cfg_int(entry.cfg + "_time");
     if(preset < 0 || preset >= entry.preset_count) return entry.default_seconds; // Hand-edited cfg.
@@ -2332,20 +2369,71 @@ shared_start_time_menu(menu)
 {
     entry = shared_start_time();
     time_text = shared_seconds_to_time_text(shared_start_time_seconds());
-    create_option(menu, "Start Time (" + entry.label + "): ^3 " + time_text, ::shared_start_time_next_preset);
+    if(get_cfg_int("custom_" + entry.cfg)) time_text += " ^7(custom)";
+    create_option(menu, "Start Time (" + entry.label + "): ^3" + time_text, ::shared_start_time_next_preset);
 
-    custom = add_submenu(menu, "custom_start", "Custom start time", "Custom Start Time");
+    custom = add_submenu(menu, "custom_start", "Custom Start Time", "Custom Start Time");
         add_cfg_toggle(custom, "Enabled", "custom_" + entry.cfg);
-        create_option(custom, "Minutes: ^3" + get_cfg_int("custom_" + entry.cfg + "_minutes"), ::cfg_increment_held, "custom_" + entry.cfg + "_minutes", array(entry.custom_min_minutes, entry.custom_max_minutes));
-        create_option(custom, "Seconds: ^3" + get_cfg_int("custom_" + entry.cfg + "_seconds"), ::cfg_increment_int, "custom_" + entry.cfg + "_seconds", array(0, 59));
+        custom_time = shared_start_time_custom_time(entry);
+        create_option(custom, "Minutes: ^3" + int(custom_time / 60), ::shared_custom_minute_step);
+        create_option(custom, "Seconds: ^3" + custom_time % 60, ::shared_custom_second_step);
 
     entries = shared_start_time_entries();
     if(entries.size > 1 && !isdefined(shared_start_time_forced_key()))
     {
         labels = [];
         foreach(entry in entries) labels[labels.size] = entry.label;
-        add_cfg_choice(menu, "Clock starts", "start_condition", labels);
+        add_cfg_choice(menu, "Clock Starts", "start_condition", labels);
     }
+}
+
+// Menu action for Custom's Minutes: the next minute, back to the first after the
+// last. The seconds stay unless the range stops short of them in that minute.
+shared_custom_minute_step()
+{
+    self.menu.step_repeats = true;
+    entry = shared_start_time();
+    custom_time = shared_start_time_custom_time(entry);
+    minutes = int(custom_time / 60) + 1;
+    if(minutes > int(entry.custom_last_seconds / 60)) minutes = int(entry.first_seconds / 60);
+    self shared_custom_time_set(entry, minutes * 60 + custom_time % 60);
+}
+
+// Menu action for Custom's Seconds: the next second, wrapping within the part of
+// this minute the range covers (at 12:30 to 22:30, 12:30 to 12:59 and 22:00 to 22:30).
+shared_custom_second_step()
+{
+    self.menu.step_repeats = true;
+    entry = shared_start_time();
+    custom_time = shared_start_time_custom_time(entry);
+    minute_start = custom_time - custom_time % 60;
+    stepped = custom_time + 1;
+    if(stepped >= minute_start + 60 || stepped > entry.custom_last_seconds) stepped = minute_start;
+    self shared_custom_time_set(entry, stepped);
+}
+
+// Editing a custom time turns it on. Saves both rows: a minute step can move the
+// seconds too.
+shared_custom_time_set(entry, custom_time)
+{
+    custom_time = shared_start_time_custom_clamp(entry, custom_time);
+    level.mode_cfg["custom_" + entry.cfg] = 1;
+    level.mode_cfg["custom_" + entry.cfg + "_seconds"] = custom_time % 60;
+    self cfg_set_int("custom_" + entry.cfg + "_minutes", int(custom_time / 60));
+}
+
+// Chat "time 18:07" (level.practice_map.set_start_time). Returns false for a mode
+// with no start time.
+shared_set_start_time(minutes, seconds)
+{
+    if(!isdefined(level.start_times)) return false;
+    entry = shared_start_time();
+    level.mode_cfg["custom_" + entry.cfg] = 1;
+    level.mode_cfg["custom_" + entry.cfg + "_minutes"] = minutes;
+    level.mode_cfg["custom_" + entry.cfg + "_seconds"] = seconds;
+    write_config(level.mode_cfg, level.mode_cfg_str);
+    self refresh_menu();
+    return true;
 }
 
 // Menu action for "Start Time": turns Custom off and moves to the next preset.
@@ -2488,20 +2576,20 @@ shared_robot_projected_cycle(cycle, round12_trio, craft_ms)
 
     start_ms = shared_robot_cycle_start_ms(cycle, round12_trio);
     end_ms = shared_robot_cycle_start_ms(cycle + 1, round12_trio) - 5000; // The loop waits 5 s after each cycle.
-    robot = "single";
-    if(round12_trio && cycle == ROUND12_TRIO_CYCLE) robot = "trios";
+    robot = "Single";
+    if(round12_trio && cycle == ROUND12_TRIO_CYCLE) robot = "Trios";
 
     if(craft_ms < end_ms)
     {
-        shared_robot_projected_cycle_string(cycle, "start", start_ms, robot);
+        shared_robot_projected_cycle_string(cycle, "Start", start_ms, robot);
         wait (end_ms - craft_ms) / 1000.0;
     }
-    shared_robot_projected_cycle_string(cycle, "end", end_ms, robot);
+    shared_robot_projected_cycle_string(cycle, "End", end_ms, robot);
 }
 
 shared_robot_projected_cycle_string(cycle, state, time_ms, robot)
 {
-    level.cycle_string = game_time_string(get_cfg_int("cycle_tracker_ms"), time_ms) + " | cycle " + cycle + " " + state + " | " + robot;
+    level.cycle_string = game_time_string(get_cfg_int("cycle_tracker_ms"), time_ms) + " | Cycle " + cycle + " " + state + " | " + robot;
     if(isDefined(level.cycle_display)) level.cycle_display setTextUnlimited(level.cycle_string);
 }
 
@@ -2574,8 +2662,8 @@ shared_boomhilda_ammo_text()
 // Held starts from Post-Ice on (the Mauser is upgraded at setup).
 shared_boomhilda_menu(settings)
 {
-    create_option(settings, "Boomhilda ammo: ^3" + shared_boomhilda_ammo_text(), ::cfg_increment_int, "boomhilda_ammo", array(0, BOOMHILDA_AMMO_RANDOM));
-    if(get_cfg_int("boomhilda_ammo") != 0) add_cfg_choice(settings, "Boomhilda clip", "boomhilda_clip", array("full", "random"));
+    create_option(settings, "Boomhilda Ammo: ^3" + shared_boomhilda_ammo_text(), ::cfg_increment_int, "boomhilda_ammo", array(0, BOOMHILDA_AMMO_RANDOM));
+    if(get_cfg_int("boomhilda_ammo") != 0) add_cfg_choice(settings, "Boomhilda Clip", "boomhilda_clip", array("full", "random"));
 }
 
 shared_boomhilda_defaults(settings_ar)
@@ -2798,12 +2886,13 @@ shared_next_round_zombies(round_key, zombies_key)
 {
     zombies = shared_round_zombies(round_key, zombies_key) + 1;
     if(zombies > shared_round_zombies_max(round_key)) zombies = 1;
+    self.menu.step_repeats = true;
     self cfg_set_int(zombies_key, zombies);
 }
 
 shared_add_round_zombies_option(menu, round_key, zombies_key)
 {
-    create_option(menu, "Zombies: ^3" + shared_round_zombies(round_key, zombies_key) + " ^7(" + shared_round_zombies_max(round_key) + ")", ::shared_next_round_zombies, round_key, zombies_key);
+    create_option(menu, "Zombies Left: ^3" + shared_round_zombies(round_key, zombies_key) + " ^7(of " + shared_round_zombies_max(round_key) + ")", ::shared_next_round_zombies, round_key, zombies_key);
 }
 
 /*##############################################################################
@@ -2862,6 +2951,7 @@ shared_segment()
     segment.excluded_doors = undefined;     // doors left closed (shared_open_doors)
     segment.open_mound = true;              // false: the mound stays closed for the player, with native timing
     segment.leave_gramophone = false;       // shared_open_mound
+    segment.required_items = shared_required_items(array()); // always collected: the setup needs them (shared_item_required)
     segment.generators = ::shared_generators; // the generator step after the black screen (undefined: none captured)
     segment.wallbuy_ak = false;             // shared_wallbuy_outlines
     segment.box_rewards = true;             // false: no challenge is filled or claimed (shared_box_rewards), no One Inch Punch
@@ -2930,7 +3020,7 @@ shared_segment_install(segment)
     level.delay_robot = true;
     level.zombie_round_start_delay = 0;
     level.n_disc_scrambles = 0; // Mound opening -> 1; each setup orb -> the next.
-    level.cycle_string = "awaiting run start"; // Until the run clock starts (user, 2026-11-02).
+    level.cycle_string = "Awaiting Run Start"; // Until the run clock starts (user, 2026-11-02).
     level.start_timing["time_sting"] = "";
     level.start_timing["ms"] = 0;
     level.start_timing["cycle"] = 0;
@@ -3073,7 +3163,7 @@ shared_held_start()
     if(!flag("segment_setup_done") || !flag("shared_tank_setup_done"))
     {
         shared_setup_trace("setup timed out, releasing anyway");
-        iprintln("^1O-Prac: setup did not finish, releasing anyway");
+        iprintln("^1Setup timed out, releasing anyway");
     }
     shared_setup_trace("setup done, waiting segment_round_ready");
     flag_wait("segment_round_ready");

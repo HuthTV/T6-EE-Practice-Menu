@@ -43,14 +43,14 @@ mobfullgame_run()
 mobfullgame_build_menu(root)
 {
     settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
-        add_cfg_choice(settings, "Key location", "key_location", array("random", "east (cafe)", "west"));
-        add_cfg_toggle(settings, "Door spawn", "door_spawn");
-        add_cfg_toggle(settings, "Second drop nuke", "second_drop_nuke");
-        add_cfg_toggle(settings, "3% drops round 1", "round1_percent_drops");
-        add_cfg_toggle(settings, "3% drops", "percent_drops");
+        add_cfg_choice(settings, "Key Location", "key_location", array("random", "east (cafe)", "west"));
+        add_cfg_toggle(settings, "Door Spawn", "door_spawn");
+        add_cfg_toggle(settings, "Second Drop Nuke", "second_drop_nuke");
+        add_cfg_toggle(settings, "3% Drops Round 1", "round1_percent_drops");
+        add_cfg_toggle(settings, "3% Drops", "percent_drops");
     box = add_submenu(settings, "box", "Box");
-        add_cfg_choice(box, "Box location", "box_location", array("random", "cafe", "warden"));
-        add_cfg_toggle(box, "Mark 2 only", "mk2_box");
+        add_cfg_choice(box, "Location", "box_location", array("random", "cafe", "warden"));
+        add_cfg_toggle(box, "MK2 Only", "mk2_box");
 }
 
 // Defaults are the old M-Practice dvar defaults.

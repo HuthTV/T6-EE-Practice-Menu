@@ -40,31 +40,27 @@
 #define ENDING_SCORE       100000
 // Zombie blood drops until the drone is retrieved: the plane step needs it.
 #define ENDING_DROP_INCREMENT  7414.44
-// Templars I..III before this round are not scheduled (the old ending practice).
-#define ENDING_FIRST_TEMPLAR_ROUND  19
 
 endingprac_initialize()
 {
-    // Start Time, 28:00 to 30:30 every 5 seconds, Custom 26 to 34 minutes. The
+    // Start Time, 28:00 to 30:30 every 5 seconds. The
     // clock starts at release (as before), on the fire link button in Odin's
     // head, or on entering Odin's fastest or second fastest hatch foot. Every
     // default is a guess (29:00 was the release's): set them to a run's times.
-    shared_start_time_add("release", "release", "Release", "28:00", "30:30", 5, "29:00", 26, 34);
-    shared_start_time_add("button", "button", "Button press", "28:00", "30:30", 5, "29:00", 26, 34);
-    shared_start_time_add("foot1", "foot", "Odin foot 1st", "28:00", "30:30", 5, "29:00", 26, 34);
-    shared_start_time_add("foot2", "foot", "Odin foot 2nd", "28:00", "30:30", 5, "29:00", 26, 34);
+    shared_start_time_add("release", "release", "Release", "28:00", "30:30", 5, "29:00");
+    shared_start_time_add("button", "button", "Button", "28:00", "30:30", 5, "29:00");
+    shared_start_time_add("foot1", "foot", "Odin foot 1st", "28:00", "30:30", 5, "29:00");
+    shared_start_time_add("foot2", "foot", "Odin foot 2nd", "28:00", "30:30", 5, "29:00");
     // The Crazy Place locations have their own: Staff kills at release, Crazy
     // Place leave on leaving through the exit. Guesses as well.
-    shared_start_time_add("staff_kills", "release", "Release", "26:30", "28:30", 5, "27:30", 24, 34);
-    shared_start_time_add("chamber_leave", "exit", "Exit", "27:15", "29:15", 5, "28:15", 24, 34);
+    shared_start_time_add("staff_kills", "release", "Release", "26:30", "28:30", 5, "27:30");
+    shared_start_time_add("chamber_leave", "exit", "Exit", "27:15", "29:15", 5, "28:15");
     level.start_time_forced = ::endingprac_forced_start_time;
     level.start_time_choices = ::endingprac_start_time_choices;
     mode_cfg_load("endingprac", endingprac_default_cfg());
     // No Trio skip setting (user, 2026-11-04): an old cfg's value is ignored.
     level.mode_cfg["trioskip"] = 0;
     shared_segment_install(endingprac_segment());
-    // The old ending practice kept Templars away until round 19.
-    shared_schedules_init(ENDING_FIRST_TEMPLAR_ROUND);
     shared_held_start_install();
     replacefunc( maps\mp\zombies\_zm_powerups::get_next_powerup, ::endingprac_get_next_powerup );
 }
@@ -72,6 +68,8 @@ endingprac_initialize()
 endingprac_segment()
 {
     segment = shared_segment();
+    // The gramophone goes to the Wind portal or the chosen exit's.
+    segment.required_items = shared_required_items(array(WIND, LIGHTNING));
     segment.split = SPLIT_FREEDOM;
     segment.round = get_cfg_int("ending_round");
     segment.round_zombies_keys = array("ending_round", "ending_zombies"); // Counted once the player is in.
@@ -311,14 +309,17 @@ endingprac_get_next_powerup() // OVERRIDE: maps\mp\zombies\_zm_powerups::get_nex
 ##############################################################################*/
 endingprac_build_menu(root)
 {
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
-        add_cfg_choice(settings, "Start Location", "ending_spawn", array("Gen 5", "Robot head", "Exit", "staff kills", "crazy place leave"));
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
+        locations = array("gen 5", "robot head", "exit", "staff kills", "crazy place leave");
+        add_cfg_choice(settings, "Start Location", "ending_spawn", locations);
+        set_menu_tag(settings, locations[get_cfg_int("ending_spawn")]);
         self shared_start_time_menu(settings);
-        if(level.segment.use_exit || get_cfg_int("ending_spawn") == ENDING_SPAWN_STAFF_KILLS) add_cfg_choice(settings, "Exit Portal", "ending_exit", array("Lightning", "Wind"));
+        spawn = get_cfg_int("ending_spawn");
+        if(spawn == ENDING_SPAWN_EXIT || spawn == ENDING_SPAWN_LEAVE || spawn == ENDING_SPAWN_STAFF_KILLS) add_cfg_choice(settings, "Exit Portal", "ending_exit", array("Lightning", "Wind"));
         create_option(settings, "Round: ^3" + get_cfg_int("ending_round"), ::cfg_increment_int, "ending_round", array(15, 16));
         shared_add_round_zombies_option(settings, "ending_round", "ending_zombies");
         // Exit and the Crazy Place locations always have it at that exit's portal (Lightning or Wind).
-        if(get_cfg_int("ending_spawn") != ENDING_SPAWN_EXIT && !endingprac_in_chamber()) add_cfg_choice(settings, "Gramophone", "ending_gram", array("in hand", "Wind portal"));
+        if(get_cfg_int("ending_spawn") != ENDING_SPAWN_EXIT && !endingprac_in_chamber()) add_cfg_choice(settings, "Gram", "ending_gram", array("in hand", "Wind portal"));
 
     self shared_build_categories(root);
     shared_add_stg_choice("loadout");

@@ -34,18 +34,19 @@ add_saveslots_menu()
 		if(!saveslot_has_settings(saved)) label += " ^9(empty)";
 
 		menu = add_submenu("presets", "saveslot" + slot, label, "Slot " + slot);
-			create_option(menu, "Load and Restart", ::saveslot_load, slot);
-			if(isDefined(self.menu.saveslot_armed) && self.menu.saveslot_armed == slot)
-				create_option(menu, "^1Confirm Overwrite", ::saveslot_save, slot);
+			create_option(menu, "Load & Restart", ::saveslot_load, slot);
+			if(saveslot_has_settings(saved))
+				create_confirm_option(menu, "Save Settings", "Confirm Overwrite", ::saveslot_save, slot);
 			else
-				create_option(menu, "Save Current Settings", ::saveslot_save, slot);
-			create_option(menu, "Rename (chat)", ::saveslot_rename_help, slot);
+				create_option(menu, "Save Settings", ::saveslot_save, slot);
+			create_option(menu, "Rename (Chat)", ::saveslot_rename_help, slot);
 	}
 }
 
 // Modes without a Settings menu (the skeleton Freeroams) have nothing to save.
 saveslots_available()
 {
+	if(is_true(level.mode.no_slots)) return false;
 	return isDefined(level.mode_cfg_str) && isDefined(self.menu) && isDefined(self.menu.option_text["mapsettings"]);
 }
 
@@ -100,17 +101,7 @@ saveslot_title(slot)
 // Overwriting a slot that holds settings asks once (leaving the row cancels it).
 saveslot_save(slot)
 {
-	saved = saveslot_get(slot);
-	armed = isDefined(self.menu.saveslot_armed) && self.menu.saveslot_armed == slot;
-	if(saveslot_has_settings(saved) && !armed)
-	{
-		self.menu.saveslot_armed = slot;
-		self refresh_menu();
-		return;
-	}
-	self.menu.saveslot_armed = undefined;
-
-	name = saveslot_name(saved);
+	name = saveslot_name(saveslot_get(slot));
 	saved = [];
 	foreach(key in getarraykeys(level.mode_cfg))
 		saved[key] = level.mode_cfg[key];
@@ -148,31 +139,42 @@ saveslot_rename_help(slot)
 saveslot_say_command(message)
 {
 	words = strtok(message, " ");
-	if(words.size < 2 || tolower(words[0]) != "slot") return false;
+	if(!words.size) return false;
+	command = tolower(words[0]);
+	if(command != "slot" && command != "save" && command != "load") return false;
 	if(!self saveslots_available())
 	{
 		self iprintln(level.mode.label + " has no save slots");
 		return true;
 	}
-	slot = int(words[1]);
-	if(words[1] != "" + slot || slot < 1 || slot > SAVESLOT_COUNT)
+	if(words.size < 2)
 	{
-		self iprintln("Usage: ^3slot <1-" + SAVESLOT_COUNT + "> <name>");
+		self saveslot_say_usage(command);
 		return true;
 	}
 
-	// Words joined by single spaces, without the characters that break the cfg
-	// format (=) or colour the menu (^), cut to SAVESLOT_NAME_MAX.
-	name = "";
-	for(i = 2; i < words.size; i++)
+	// "load <name>" finds the slot by its name.
+	if(command == "load")
 	{
-		word = saveslot_clean_word(words[i]);
-		if(word == "") continue;
-		if(name != "") name += " ";
-		name += word;
+		slot = saveslot_find(saveslot_words_name(words, 1));
+		if(slot == 0) slot = saveslot_number(words[1]);
+		if(slot == 0) self saveslot_say_usage(command);
+		else self saveslot_load(slot);
+		return true;
 	}
-	if(name.size > SAVESLOT_NAME_MAX) name = getsubstr(name, 0, SAVESLOT_NAME_MAX);
-	if(name.size > 0 && getsubstr(name, name.size - 1, name.size) == " ") name = getsubstr(name, 0, name.size - 1);
+
+	slot = saveslot_number(words[1]);
+	if(slot == 0)
+	{
+		self saveslot_say_usage(command);
+		return true;
+	}
+	name = saveslot_words_name(words, 2);
+	if(command == "save")
+	{
+		self saveslot_save(slot);
+		if(name == "") return true;
+	}
 
 	saved = saveslot_get(slot);
 	saved["slot_name"] = name;
@@ -181,6 +183,55 @@ saveslot_say_command(message)
 	else self iprintln(level.mode.label + " Slot " + slot + " renamed to " + name);
 	self refresh_menu();
 	return true;
+}
+
+saveslot_say_usage(command)
+{
+	switch(command)
+	{
+		case "save":
+			self iprintln("^3save <1-" + SAVESLOT_COUNT + "> <name>^7: saves to that slot, the name is optional");
+			break;
+		case "load":
+			self iprintln("^3load <1-" + SAVESLOT_COUNT + " or name>^7: loads that slot and restarts");
+			break;
+		default:
+			self iprintln("^3slot <1-" + SAVESLOT_COUNT + "> <name>^7: renames that slot, no name clears it");
+			break;
+	}
+}
+
+// The slot number word says, or 0.
+saveslot_number(word)
+{
+	slot = int(word);
+	if(word != "" + slot || slot < 1 || slot > SAVESLOT_COUNT) return 0;
+	return slot;
+}
+
+// The slot called name, or 0.
+saveslot_find(name)
+{
+	for(slot = 1; slot <= SAVESLOT_COUNT; slot++)
+		if(name != "" && tolower(saveslot_name(saveslot_get(slot))) == tolower(name)) return slot;
+	return 0;
+}
+
+// Words from first on, joined by single spaces, without the characters that break
+// the cfg format (=) or colour the menu (^), cut to SAVESLOT_NAME_MAX.
+saveslot_words_name(words, first)
+{
+	name = "";
+	for(i = first; i < words.size; i++)
+	{
+		word = saveslot_clean_word(words[i]);
+		if(word == "") continue;
+		if(name != "") name += " ";
+		name += word;
+	}
+	if(name.size > SAVESLOT_NAME_MAX) name = getsubstr(name, 0, SAVESLOT_NAME_MAX);
+	if(name.size > 0 && getsubstr(name, name.size - 1, name.size) == " ") name = getsubstr(name, 0, name.size - 1);
+	return name;
 }
 
 saveslot_clean_word(word)

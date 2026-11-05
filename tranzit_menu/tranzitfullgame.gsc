@@ -67,13 +67,13 @@ tranzitfullgame_build_menu(root)
             for(i = 1; i <= DENIZEN_TELEPORTS; i++)
                 add_cfg_choice(teleports, "Teleport " + i, "teleport_" + i, lights);
 
-        parts = add_submenu(settings, "jetgun", "Jet Gun Parts", "Jet Gun");
+        parts = add_submenu(settings, "jetgun", "Jetgun Parts", "Jetgun");
             foreach(part in tranzitfullgame_jetgun_parts())
                 add_cfg_choice(parts, part.label, part.key, tranzitfullgame_jetgun_labels(part));
 
         maxis = add_submenu(settings, "maxis", "Maxis Side", "Maxis");
             add_cfg_choice(maxis, "Storm", "storm_region", array("random", "bus depot", "diner", "farm", "cornfield", "power station", "town"));
-            add_cfg_choice(maxis, "Avogadro return", "avogadro_return", array("vanilla", "next round", "at once"));
+            add_cfg_choice(maxis, "Avogadro", "avogadro_return", array("vanilla", "next round", "at once"));
 }
 
 /*##############################################################################
@@ -177,7 +177,7 @@ tranzitfullgame_teleport_player( player )
             if ( forced != self && !forced maps\mp\zm_transit_ai_screecher::other_players_close_to_light( player ) )
                 dest_light = forced;
             else
-                iprintln( "T-Prac: teleport " + n + " to " + forced.script_noteworthy + " not valid, random" );
+                iprintln( "T-Prac: teleport " + n + " to " + forced.script_noteworthy + " not valid, using random" );
         }
     }
 

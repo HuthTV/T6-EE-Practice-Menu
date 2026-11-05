@@ -101,7 +101,7 @@ puzzle_rng_build_menus(parent)
             for(ring = 1; ring <= 4; ring++)
                 add_cfg_choice(wind, labels[ring - 1], "wind_ring_" + ring, names);
             wind_keys = array("wind_ring_1", "wind_ring_2", "wind_ring_3", "wind_ring_4");
-            create_option(wind, "All 1 shot (best)", ::puzzle_rng_set_keys, wind_keys, 1);
+            create_option(wind, "Optimal (1 1 1 1)", ::puzzle_rng_set_keys, wind_keys, 1);
             create_option(wind, "All random", ::puzzle_rng_set_keys, wind_keys, 0);
     }
     if(puzzle_rng_has("fire") && isDefined(level.puzzle_fire_sizes))
@@ -146,8 +146,8 @@ puzzle_rng_build_menus(parent)
             for(visit = puzzle_rng_first_visit(); visit <= puzzle_rng_visit_count(); visit++)
             {
                 page = add_submenu(walls, "chamber_visit_" + visit, puzzle_rng_visit_row(visit) + puzzle_rng_visit_text(visit), puzzle_rng_visit_title(visit));
-                    add_cfg_choice(page, "Clear staff", "chamber_v" + visit + "_a", choices);
-                    add_cfg_choice(page, "Clear staff", "chamber_v" + visit + "_b", choices);
+                    add_cfg_choice(page, "Clear Staff 1", "chamber_v" + visit + "_a", choices);
+                    add_cfg_choice(page, "Clear Staff 2", "chamber_v" + visit + "_b", choices);
                 wall_keys[wall_keys.size] = "chamber_v" + visit + "_a";
                 wall_keys[wall_keys.size] = "chamber_v" + visit + "_b";
             }
@@ -420,7 +420,7 @@ puzzle_rng_fire_puzzle_2_init()
 // starts set level.puzzle_rng_visit_labels to these before their cfg loads.
 puzzle_rng_route_visit_labels()
 {
-    return array("Ice gem", "Ice code", "Wind gem", "Wind puzzle", "Fire gem", "Fire kills", "Fire place", "Piano", "Upgrade", "Raise hell");
+    return array("Ice Gem", "Ice Code", "Wind Gem", "Wind Puzzle", "Fire Gem", "Fire Kills", "Fire Place", "Piano", "Upgrade", "Raise Hell");
 }
 
 // Segment starts, once their cfg is loaded: first is the first visit still ahead

@@ -73,8 +73,8 @@ buriedfullgame_default_cfg()
 buriedfullgame_build_menu(root)
 {
     settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
-        add_cfg_toggle(settings, "3% drops", "percent_drops");
-        add_cfg_choice(settings, "1st ghost round perk", "ghost_perk", buriedfullgame_perk_options().labels);
+        add_cfg_toggle(settings, "3% Drops", "percent_drops");
+        add_cfg_choice(settings, "Ghost Perk", "ghost_perk", buriedfullgame_perk_options().labels);
 
         box = add_submenu(settings, "box", "Mystery Box", "Box");
             box_guns = buriedfullgame_box_hit_options();
@@ -84,16 +84,16 @@ buriedfullgame_build_menu(root)
         special = add_submenu(settings, "infinity", "Infinity Round", "Infinity Round");
             spots = buriedfullgame_corpse_spot_labels();
             for(i = 1; i <= CORPSES; i++)
-                buriedfullgame_add_choice(special, "Body " + i + " spot", "body_spot_" + i, spots);
-            add_cfg_choice(special, "Switch found on search", "switch_search", array("random", "1st", "2nd", "3rd", "4th"));
-            add_cfg_choice(special, "Drop after round", "special_round_drop", buriedfullgame_drop_options().labels);
+                buriedfullgame_add_choice(special, "Body " + i + " Spot", "body_spot_" + i, spots);
+            add_cfg_choice(special, "Switch Search", "switch_search", array("random", "1st", "2nd", "3rd", "4th"));
+            add_cfg_choice(special, "Drop After Round", "special_round_drop", buriedfullgame_drop_options().labels);
 
         maze = add_submenu(settings, "maze", "Maze Switches", "Maze");
-            add_cfg_choice(maze, "Maze layout", "maze_layout", array("random", "layout 1", "layout 2", "layout 3", "layout 4", "layout 5", "layout 6"));
+            add_cfg_choice(maze, "Layout", "maze_layout", array("random", "1", "2", "3", "4", "5", "6"));
             for(i = 1; i <= MAZE_SWITCHES; i++)
-                add_cfg_choice(maze, "Switch " + i + " side", "switch_side_" + i, array("random", "N / W", "S / E"));
+                add_cfg_choice(maze, "Switch " + i + " Side", "switch_side_" + i, array("random", "N / W", "S / E"));
             for(i = 1; i <= MAZE_SWITCHES; i++)
-                add_cfg_choice(maze, "Switch " + i + " flipped", "switch_order_" + i, array("random", "1st", "2nd", "3rd", "4th"));
+                add_cfg_choice(maze, "Switch " + i + " Order", "switch_order_" + i, array("random", "1st", "2nd", "3rd", "4th"));
 }
 
 // add_cfg_choice for a list that is only known at run time: a saved value past

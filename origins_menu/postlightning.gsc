@@ -22,9 +22,9 @@
 
 postlightning_initialize()
 {
-    // Start Time in the Lightning portal's teleport: 24:40 to 26:40, every 5
-    // seconds, 25:40 by default. Custom: 23 to 31 minutes. A guess.
-    shared_start_time_add("piano", "portal", "Portal", "24:40", "26:40", 5, "25:40", 23, 31);
+    // Start Time in the Lightning portal's teleport, every 5 seconds: the Lightning
+    // craft's until the real one is known (user, 2026-11-05).
+    shared_start_time_add("piano", "portal", "Portal", LIGHTNING_CRAFT_MIN, LIGHTNING_CRAFT_MAX, 5, LIGHTNING_CRAFT_DEFAULT);
     puzzle_rng_install(PUZZLE_RNG_CHAMBER);
     level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();
     mode_cfg_load("postlightning", postlightning_default_cfg());
@@ -37,6 +37,7 @@ postlightning_initialize()
 postlightning_segment()
 {
     segment = shared_segment();
+    segment.required_items = shared_required_items(array(LIGHTNING));
     // Every staff is crafted: as in Ending prac, no split starts the run clock (the
     // portal does) and the only row is the live Freedom one.
     segment.split = SPLIT_FREEDOM;
@@ -72,15 +73,15 @@ postlightning_setup()
 
 postlightning_build_menu(root)
 {
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
         self shared_start_time_menu(settings);
-        create_option(settings, "Zombies left: ^3" + shared_zombies_left_text("lightning_zombies"), ::cfg_increment_int, "lightning_zombies", array(0, 24));
+        create_option(settings, "Zombies Left: ^3" + shared_zombies_left_text("lightning_zombies"), ::cfg_increment_int, "lightning_zombies", array(0, 24));
 
     self shared_build_categories(root);
     shared_add_stg_choice("loadout");
     self shared_boomhilda_menu("loadout");
     self shared_add_item_rows("loadout");
-    add_cfg_toggle("special_ai", "Trio skip", "trioskip");
+    add_cfg_toggle("special_ai", "Trio Skip", "trioskip");
     self shared_build_segment_menus(false, true);
 }
 

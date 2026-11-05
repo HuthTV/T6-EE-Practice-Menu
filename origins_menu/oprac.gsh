@@ -130,6 +130,24 @@
 #define BOOMHILDA_CLIP_RANDOM  1   // Any split of the total the clip and stock can hold.
 
 /*##############################################################################
+                              Staff craft times (shared_start_time_add)
+##############################################################################*/
+// Min, default and max run clock of each staff's craft. Every start of that
+// staff's Pre and Post modes uses them until it has real times (user, 2026-11-05).
+#define ICE_CRAFT_MIN            "12:30"
+#define ICE_CRAFT_DEFAULT        "13:30"
+#define ICE_CRAFT_MAX            "14:30"
+#define WIND_CRAFT_MIN           "17:00"
+#define WIND_CRAFT_DEFAULT       "18:20"
+#define WIND_CRAFT_MAX           "19:00"
+#define FIRE_CRAFT_MIN           "19:50"
+#define FIRE_CRAFT_DEFAULT       "21:25"
+#define FIRE_CRAFT_MAX           "21:50"
+#define LIGHTNING_CRAFT_MIN      "24:10"
+#define LIGHTNING_CRAFT_DEFAULT  "25:10"
+#define LIGHTNING_CRAFT_MAX      "26:10"
+
+/*##############################################################################
                               Ice prefills (Wind and Fire starts, "ice_souls")
 ##############################################################################*/
 #define ICE_SOULS_MAX  10   // "Ice prefills": souls already in the placed Ice staff.

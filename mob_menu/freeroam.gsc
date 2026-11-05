@@ -40,9 +40,9 @@ freeroam_run()
 freeroam_build_menu(root)
 {
     settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
-        add_cfg_toggle(settings, "Open doors on start", "start_doors");
-        add_cfg_toggle(settings, "Tomahawk on start", "start_tomahawk");
-        add_cfg_toggle(settings, "Demigod on start", "start_demigod");
+        add_cfg_toggle(settings, "Open Doors on Start", "start_doors");
+        add_cfg_toggle(settings, "Tomahawk on Start", "start_tomahawk");
+        add_cfg_toggle(settings, "Demigod on Start", "start_demigod");
 }
 
 freeroam_default_cfg()

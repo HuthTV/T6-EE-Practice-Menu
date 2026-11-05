@@ -301,7 +301,7 @@ destroy_array(array)
 {
 	keys=getArrayKeys(array);
 	for(a=0;a < keys.size;a++)
-		if(isDefined(array[keys[ a ] ][0]))
+		if(isArray(array[keys[ a ] ]))
 			for(e=0;e < array[keys[ a ] ].size;e++)
 				array[keys[ a ] ][e] destroy();
 		else
@@ -311,7 +311,7 @@ destroy_array(array)
 get_cfg_int(setting)
 {
     // Check mode_cfg first (primary), then fallback to base_cfg
-    if(isDefined(level.mode_cfg[setting]))
+    if(isDefined(level.mode_cfg) && isDefined(level.mode_cfg[setting]))
         return int(level.mode_cfg[setting]);
     else if(isDefined(level.base_cfg[setting]))
         return int(level.base_cfg[setting]);
@@ -341,7 +341,7 @@ cfgint_compare(setting, d_true, d_false)
     else
     {
         if(value)   return "^2on";
-        else        return "^1off";
+        else        return "^3off";
     }
 }
 
@@ -355,7 +355,7 @@ int_compare(value, d_true, d_false)
     else
     {
         if(value)   return "^2on";
-        else        return "^1off";
+        else        return "^3off";
     }
 }
 

@@ -34,12 +34,11 @@
 
 prewind_initialize()
 {
-    // Start Times, every 5 seconds. Craft: 17:00 to 19:00, 18:20 by default,
-    // Custom 16 to 24 minutes (Pre-Ice + 4). Exit, on leaving the Crazy Place:
-    // the same range, 17:40 by default (a guess). Set the guesses to a run's times.
-    shared_start_time_add("craft", "craft", "Craft", "17:00", "19:00", 5, "18:20", 16, 24);
-    shared_start_time_add("stg", "craft", "Craft", "17:00", "19:00", 5, "18:20", 16, 24); // STG: a guess
-    shared_start_time_add("exit", "exit", "Exit", "17:00", "19:00", 5, "17:40", 16, 24);
+    // Start Times, every 5 seconds: the Wind craft's. Exit, on leaving the Crazy
+    // Place, has it too until its real time is known (user, 2026-11-05).
+    shared_start_time_add("craft", "craft", "Craft", WIND_CRAFT_MIN, WIND_CRAFT_MAX, 5, WIND_CRAFT_DEFAULT);
+    shared_start_time_add("stg", "craft", "Craft", WIND_CRAFT_MIN, WIND_CRAFT_MAX, 5, WIND_CRAFT_DEFAULT);
+    shared_start_time_add("exit", "exit", "Exit", WIND_CRAFT_MIN, WIND_CRAFT_MAX, 5, WIND_CRAFT_DEFAULT);
     level.start_time_choices = ::prewind_start_time_choices;
     puzzle_rng_install(PUZZLE_RNG_WIND);
     level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();
@@ -66,6 +65,7 @@ prewind_start_time_choices()
 prewind_segment()
 {
     segment = shared_segment();
+    segment.required_items = shared_required_items(array(WIND));
     segment.split = SPLIT_WIND;
     segment.round = get_cfg_int("wind_start_round");
     if(segment.round == 11) segment.round_zombies = 1;
@@ -103,10 +103,10 @@ prewind_setup()
 prewind_build_menu(root)
 {
     location = get_cfg_int("wind_spawn");
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
-        shared_add_location_choice(settings, "wind_spawn", array(PREWIND_LOC_CRAFT, PREWIND_LOC_STG, PREWIND_LOC_EXIT), array("Craft", "STG", "Exit"));
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
+        shared_add_location_choice(settings, "wind_spawn", array(PREWIND_LOC_CRAFT, PREWIND_LOC_STG, PREWIND_LOC_EXIT), array("craft", "STG", "exit"));
         self shared_start_time_menu(settings);
-        create_option(settings, "Start Round: ^3" + get_cfg_int("wind_start_round"), ::cfg_increment_int, "wind_start_round", array(11, 12));
+        create_option(settings, "Round: ^3" + get_cfg_int("wind_start_round"), ::cfg_increment_int, "wind_start_round", array(11, 12));
 
     self shared_build_categories(root);
     shared_add_stg_choice("loadout");

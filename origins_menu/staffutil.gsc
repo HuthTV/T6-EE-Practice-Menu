@@ -50,6 +50,7 @@ shared_staff_setup_start()
 // staff to its real state once setup is done.
 shared_refresh_staff_icons()
 {
+    if(!isdefined(level.segment_setup_staffs)) return;
     foreach(staff_id in level.segment_setup_staffs)
     {
         staff = maps\mp\zm_tomb_craftables::get_staff_info_from_element_index(staff_id);
@@ -388,7 +389,7 @@ shared_shoot_orb(staff_id)
         gem_position = maps\mp\zm_tomb_quest_crypt::chamber_disc_get_gem_position(staff.gem);
         discs = getentarray("crypt_puzzle_disc", "script_noteworthy");
         foreach(disc in discs)
-            if(disc.targetname != "crypt_puzzle_disc_main") disc.position = gem_position;
+            if(!isdefined(disc.targetname) || disc.targetname != "crypt_puzzle_disc_main") disc.position = gem_position;
         foreach(disc in discs)
             disc.angles = (disc.angles[0], disc.position * 90, disc.angles[2]);
         level notify("crypt_disc_rotation");

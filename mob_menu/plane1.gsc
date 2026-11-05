@@ -44,8 +44,8 @@ plane1_run()
 plane1_build_menu(root)
 {
     settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
-        add_cfg_toggle(settings, "Plane built", "prebuilt_plane");
-        create_option(settings, "Docks wolf souls: ^3" + plane1_docks_souls_text(), ::cfg_increment_int, "docks_souls", array(0, 6));
+        add_cfg_toggle(settings, "Plane Built", "prebuilt_plane");
+        create_option(settings, "Docks Souls: ^3" + plane1_docks_souls_text(), ::cfg_increment_int, "docks_souls", array(0, 6));
         mob_plane_settings_menu(settings, PLANE1_ROUND, 6);
 }
 

@@ -28,11 +28,10 @@
 
 prefire_initialize()
 {
-    // Start Time on the Fire craft: 19:50 to 21:50, every 5 seconds, 21:25 by
-    // default. Custom: 19 to 27 minutes (Pre-Wind + 3). STG has its own, the
-    // same range for now (a guess).
-    shared_start_time_add("craft", "craft", "Craft", "19:50", "21:50", 5, "21:25", 19, 27);
-    shared_start_time_add("stg", "craft", "Craft", "19:50", "21:50", 5, "21:25", 19, 27);
+    // Start Time on the Fire craft, every 5 seconds. STG has its own, the same for
+    // now.
+    shared_start_time_add("craft", "craft", "Craft", FIRE_CRAFT_MIN, FIRE_CRAFT_MAX, 5, FIRE_CRAFT_DEFAULT);
+    shared_start_time_add("stg", "craft", "Craft", FIRE_CRAFT_MIN, FIRE_CRAFT_MAX, 5, FIRE_CRAFT_DEFAULT);
     level.start_time_choices = ::prefire_start_time_choices;
     puzzle_rng_install(PUZZLE_RNG_FIRE);
     level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();
@@ -53,6 +52,7 @@ prefire_start_time_choices()
 prefire_segment()
 {
     segment = shared_segment();
+    segment.required_items = shared_required_items(array(WIND));
     segment.split = SPLIT_FIRE;
     // Round 12 with 1 zombie left (user, 2026-10-20). shared_set_round counts
     // anything planned for round 12 as done: a 4 rounder Panzer 2 never comes,
@@ -91,8 +91,8 @@ prefire_setup()
 
 prefire_build_menu(root)
 {
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
-        shared_add_location_choice(settings, "fire_spawn", array(PREFIRE_LOC_CRAFT, PREFIRE_LOC_STG, PREFIRE_LOC_EXIT), array("Craft", "STG", "Exit"));
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
+        shared_add_location_choice(settings, "fire_spawn", array(PREFIRE_LOC_CRAFT, PREFIRE_LOC_STG, PREFIRE_LOC_EXIT), array("craft", "STG", "exit"));
         self shared_start_time_menu(settings);
 
     self shared_build_categories(root);
@@ -100,7 +100,7 @@ prefire_build_menu(root)
     self shared_boomhilda_menu("loadout");
     self shared_add_item_rows("loadout");
     shared_add_ice_souls_row("puzzles");
-    add_cfg_toggle("special_ai", "Trio skip", "trioskip");
+    add_cfg_toggle("special_ai", "Trio Skip", "trioskip");
     // Disc Turn is for the Craft start: Exit keeps the normal scramble, STG
     // leaves the dials as scrambled.
     self shared_build_segment_menus(get_cfg_int("fire_spawn") == PREFIRE_LOC_CRAFT, get_cfg_int("fire_spawn") != PREFIRE_LOC_STG);

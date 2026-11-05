@@ -105,8 +105,8 @@ mob_plane_cfg_perks()
 mob_plane_settings_menu(settings, min_round, max_round)
 {
     practice_start_time_menu(settings);
-    create_option(settings, "Start round: ^3" + get_cfg_int("start_round"), ::cfg_increment_int, "start_round", array(min_round, max_round));
-    create_option(settings, "Start round zombies: ^3" + mob_start_zombies_text(), ::cfg_increment_int, "start_zombies", array(START_ZOMBIES_RANDOM, START_ZOMBIES_FULL));
+    create_option(settings, "Round: ^3" + get_cfg_int("start_round"), ::cfg_increment_int, "start_round", array(min_round, max_round));
+    create_option(settings, "Zombies Left: ^3" + mob_start_zombies_text(), ::cfg_increment_int, "start_zombies", array(START_ZOMBIES_RANDOM, START_ZOMBIES_FULL));
     perks = add_submenu(settings, "perks", "Perks");
         add_cfg_toggle(perks, "Juggernog", "perk_jugg");
         add_cfg_toggle(perks, "Double Tap", "perk_dt");

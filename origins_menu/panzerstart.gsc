@@ -46,9 +46,9 @@ panzerstart_initialize()
 {
     // Start time presets: 9:00 to 11:00, every 5 seconds, 10:00 by default. A
     // guess at the run clock at the start of round 8.
-    // Custom start time: 8 to 14 minutes.
-    shared_start_time_add("release", "release", "Release", "9:00", "11:00", 5, "10:00", 8, 14);
+    shared_start_time_add("release", "release", "Release", "9:00", "11:00", 5, "10:00");
     puzzle_rng_install(PUZZLE_RNG_ICE);
+    level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();
     mode_cfg_load("panzerstart", panzerstart_default_cfg());
     shared_segment_install(panzerstart_segment());
     // No Gen 6 skip at setup: Templars come on round 10 unless the player does it.
@@ -229,7 +229,7 @@ panzerstart_souls_text(key)
 panzerstart_slowed_hud()
 {
     level.slew = self createFontString("default", 1.3);
-    level.slew setpoint("LEFT", "LEFT", "LEFT", -105);
+    level.slew setpoint("LEFT", "LEFT", 0, -105);
     level.slew.label = &"Slowed: ^6";
     level.slew.alpha = 1;
 
@@ -244,28 +244,28 @@ panzerstart_slowed_hud()
 panzerstart_mechz_hud()
 {
     level.comp = createServerFontString("default", 1.3);
-    level.comp setpoint("LEFT", "LEFT", "LEFT", -120);
-    level.comp.label = &"Complex behaviors: ^6";
+    level.comp setpoint("LEFT", "LEFT", 0, -120);
+    level.comp.label = &"Complex AI: ^6";
     level.comp.alpha = 1;
 
     level.p_hp = createServerFontString("default", 1.3);
-    level.p_hp setpoint("LEFT", "LEFT", "LEFT", -15);
+    level.p_hp setpoint("LEFT", "LEFT", 0, -15);
     level.p_hp.label = &"HP: ^6";
     level.p_hp.alpha = 1;
 
     level.p_mask = createServerFontString("default", 1.3);
-    level.p_mask setpoint("LEFT", "LEFT", "LEFT", 0);
-    level.p_mask.label = &"MASK: ^6";
+    level.p_mask setpoint("LEFT", "LEFT", 0, 0);
+    level.p_mask.label = &"Mask: ^6";
     level.p_mask.alpha = 1;
 
     level.p_power = createServerFontString("default", 1.3);
-    level.p_power setpoint("LEFT", "LEFT", "LEFT", 15);
-    level.p_power.label = &"POWERPLANT COVER: ^6";
+    level.p_power setpoint("LEFT", "LEFT", 0, 15);
+    level.p_power.label = &"Power Cover: ^6";
     level.p_power.alpha = 1;
 
     level.p_power_d = createServerFontString("default", 1.3);
-    level.p_power_d setpoint("LEFT", "LEFT", "LEFT", 30);
-    level.p_power_d.label = &"POWERPLANT: ^6";
+    level.p_power_d setpoint("LEFT", "LEFT", 0, 30);
+    level.p_power_d.label = &"Power: ^6";
     level.p_power_d.alpha = 1;
 
     while(self.health > 0)
@@ -378,13 +378,13 @@ panzerstart_build_menu(root)
     spawn = panzerstart_box_index("spawn_box");
     last = boxes.size - 1;
 
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
         self shared_start_time_menu(settings);
-        create_option(settings, "Start box: ^3" + boxes[start].label, ::cfg_increment_int, "start_box", array(0, last));
-        create_option(settings, "Spawn box: ^3" + boxes[spawn].label, ::cfg_increment_int, "spawn_box", array(0, last));
+        create_option(settings, "First Box: ^3" + boxes[start].label, ::cfg_increment_int, "start_box", array(0, last));
+        create_option(settings, "Spawn Box: ^3" + boxes[spawn].label, ::cfg_increment_int, "spawn_box", array(0, last));
         // The start box is always full, so it has no souls row.
         for(i = 0; i < boxes.size; i++)
-            if(i != start) create_option(settings, boxes[i].label + " box: " + panzerstart_souls_text(boxes[i].key), ::cfg_increment_int, boxes[i].key, array(0, PANZERSTART_BOX_SOULS));
+            if(i != start) create_option(settings, boxes[i].label + " Souls: " + panzerstart_souls_text(boxes[i].key), ::cfg_increment_int, boxes[i].key, array(0, PANZERSTART_BOX_SOULS));
         add_cfg_toggle(settings, "Gram", "early_gram", "^2in hand", "^3placed");
 
     self shared_build_categories(root);

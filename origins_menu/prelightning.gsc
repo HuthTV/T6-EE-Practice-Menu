@@ -29,11 +29,10 @@
 
 prelightning_initialize()
 {
-    // Start Time on the Lightning craft: 24:10 to 26:10, every 5 seconds, 25:10
-    // by default. Custom: 23 to 31 minutes (Pre-Fire + 4). STG has its own, the
-    // same range for now (a guess).
-    shared_start_time_add("craft", "craft", "Craft", "24:10", "26:10", 5, "25:10", 23, 31);
-    shared_start_time_add("stg", "craft", "Craft", "24:10", "26:10", 5, "25:10", 23, 31);
+    // Start Time on the Lightning craft, every 5 seconds. STG has its own, the same
+    // for now.
+    shared_start_time_add("craft", "craft", "Craft", LIGHTNING_CRAFT_MIN, LIGHTNING_CRAFT_MAX, 5, LIGHTNING_CRAFT_DEFAULT);
+    shared_start_time_add("stg", "craft", "Craft", LIGHTNING_CRAFT_MIN, LIGHTNING_CRAFT_MAX, 5, LIGHTNING_CRAFT_DEFAULT);
     level.start_time_choices = ::prelightning_start_time_choices;
     puzzle_rng_install(PUZZLE_RNG_CHAMBER);
     level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();
@@ -54,6 +53,7 @@ prelightning_start_time_choices()
 prelightning_segment()
 {
     segment = shared_segment();
+    segment.required_items = shared_required_items(array(LIGHTNING));
     segment.split = SPLIT_LIGHTNING;
     segment.round = 14;
     zombies = get_cfg_int("lightning_zombies"); // 0: the full round
@@ -85,16 +85,16 @@ prelightning_setup()
 
 prelightning_build_menu(root)
 {
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
-        shared_add_location_choice(settings, "lightning_spawn", array(PRELIGHTNING_LOC_CRAFT, PRELIGHTNING_LOC_STG, PRELIGHTNING_LOC_EXIT), array("Craft", "STG", "Exit"));
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
+        shared_add_location_choice(settings, "lightning_spawn", array(PRELIGHTNING_LOC_CRAFT, PRELIGHTNING_LOC_STG, PRELIGHTNING_LOC_EXIT), array("craft", "STG", "exit"));
         self shared_start_time_menu(settings);
-        create_option(settings, "Zombies left: ^3" + shared_zombies_left_text("lightning_zombies"), ::cfg_increment_int, "lightning_zombies", array(0, 24));
+        create_option(settings, "Zombies Left: ^3" + shared_zombies_left_text("lightning_zombies"), ::cfg_increment_int, "lightning_zombies", array(0, 24));
 
     self shared_build_categories(root);
     shared_add_stg_choice("loadout");
     self shared_boomhilda_menu("loadout");
     self shared_add_item_rows("loadout");
-    add_cfg_toggle("special_ai", "Trio skip", "trioskip");
+    add_cfg_toggle("special_ai", "Trio Skip", "trioskip");
     // Disc Turn is for the Craft start: Exit keeps the normal scramble, STG
     // leaves the dials as scrambled.
     self shared_build_segment_menus(get_cfg_int("lightning_spawn") == PRELIGHTNING_LOC_CRAFT, get_cfg_int("lightning_spawn") != PRELIGHTNING_LOC_STG);

@@ -17,8 +17,10 @@
 // open_doors, run...) as the map gets features. Settings are saved in B_PRAC/.
 buried_practice_map()
 {
-    map = practice_map("Huth's B-Practice", "Huth's Buried Practice Tool", "B_PRAC/", "b_menu_gamemode");
+    map = practice_map("Huth's B-Prac", "Huth's Buried Practice Tool", "B_PRAC/", "b_menu_gamemode");
     map.accent_color = (0.76, 0.6, 0.42); // Western tan (user, 2026-11-04)
+    map.cursor_color = (0.9, 0.74, 0.54);
+    map.header_text_color = (0, 0, 0);
     // MTAR PaP (MMS): the B2EE timer's solo Buried fridge.
     victis_practice_map(map, "tar21_upgraded_zm+mms", ::buried_madeup_install);
     return map;

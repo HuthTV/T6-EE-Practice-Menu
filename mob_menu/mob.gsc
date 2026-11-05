@@ -17,11 +17,13 @@
 // here they are saved in M_PRAC/ (older builds used MPRAC/).
 mob_practice_map()
 {
-    map = practice_map("Huth's M-Practice", "Huth's Mob Practice Tool", "M_PRAC/", "m_menu_gamemode");
+    map = practice_map("Huth's M-Prac", "Huth's Mob Practice Tool", "M_PRAC/", "m_menu_gamemode");
     // Run splits in MOB_SPLIT_* order (mob.gsh); Headphones, the last, always shows.
     map.split_names = array("dryer", "gondola_1", "plane_1", "gondola_2", "plane_2", "gondola_3", "plane_3", "codes", "headphones");
     map.split_labels = array("Dryer", "Gondola I", "Plane I", "Gondola II", "Plane II", "Gondola III", "Plane III", "Codes", "Headphones");
     map.accent_color = (1, 0.5, 0.25);
+    map.cursor_color = (1, 0.62, 0.36);
+    map.header_text_color = (0, 0, 0);
     map.initialize = ::mob_initialize;
     map.build_hud = ::mob_build_hud;
     map.build_cheats = ::mob_build_cheats;
@@ -60,7 +62,6 @@ mob_base_cfg_defaults(settings_ar)
     settings_ar["hud_mana"] = 0;
     settings_ar["hud_despawns"] = 0;
     settings_ar["hud_autoscroll"] = 0;   // Dryer and bridge countdowns.
-    settings_ar["hud_spawn_probe"] = 0;  // Temporary: afterlife spawn mapping probe.
     settings_ar["force_mantle_spawn"] = 0; // Claim the mantle hole spawn under the plane.
     settings_ar["mantle_spawn_set"] = 0;   // Mantle spawn position, set in game.
     settings_ar["mantle_spawn_x"] = 0;
@@ -77,37 +78,36 @@ mob_base_cfg_defaults(settings_ar)
 
 mob_build_hud(hud)
 {
-	add_cfg_toggle(hud, "Wolf souls", "hud_wolves");
-	add_cfg_toggle(hud, "Afterlife mana", "hud_mana");
-	add_cfg_toggle(hud, "Despawn printer", "hud_despawns");
-	add_cfg_toggle(hud, "Dryer/bridge timers", "hud_autoscroll");
-	add_cfg_toggle(hud, "Spawn probe (temp)", "hud_spawn_probe");
+	add_cfg_toggle(hud, "Wolf Souls", "hud_wolves");
+	add_cfg_toggle(hud, "Afterlife Mana", "hud_mana");
+	add_cfg_toggle(hud, "Despawn Log", "hud_despawns");
+	add_cfg_toggle(hud, "Dryer/Bridge Timers", "hud_autoscroll");
 }
 
 mob_build_cheats(cheats)
 {
-	create_option(cheats, "Freeze spawns: " + int_compare(!flag("spawn_zombies"), "^5frozen", "^2running"), ::mob_toggle_spawns);
-	create_option(cheats, "Get plane parts", ::mob_get_plane_parts);
+	create_option(cheats, "Spawns: " + int_compare(!flag("spawn_zombies"), "^5frozen", "^2running"), ::mob_toggle_spawns);
+	create_option(cheats, "Give Plane Parts", ::mob_get_plane_parts);
 	create_option(cheats, "Give MP5", ::mob_give_weapon, "mp5k_zm");
-	add_cfg_toggle(cheats, "Plane timescale", "plane_timescale");
+	add_cfg_toggle(cheats, "Plane Timescale", "plane_timescale");
 
 	teleport = add_submenu(cheats, "teleport", "Teleport");
-		add_cfg_toggle(teleport, "Return key [{+actionslot 3}]", "tp_return");
+		add_cfg_toggle(teleport, "Return Key [{+actionslot 3}]", "tp_return");
 		foreach(name in level.mob_teleport_names)
 			create_option(teleport, name, ::mob_teleport, name);
 
 	afterlife = add_submenu(cheats, "afterlife", "Afterlife");
-		add_cfg_toggle(afterlife, "Infinite afterlives", "infinite_afterlives");
-		create_option(afterlife, "Infinite mana: " + int_compare(is_true(self.infinite_mana)), ::mob_toggle_infinite_mana);
-		create_option(afterlife, "Refill afterlives", ::mob_refill_afterlives);
-		add_cfg_toggle(afterlife, "Force mantle spawn", "force_mantle_spawn");
-		create_option(afterlife, "Set this spawn as mantle: " + mob_mantle_spawn_text(), ::mob_set_mantle_spawn);
+		add_cfg_toggle(afterlife, "Infinite Afterlives", "infinite_afterlives");
+		create_option(afterlife, "Infinite Mana: " + int_compare(is_true(self.infinite_mana)), ::mob_toggle_infinite_mana);
+		create_option(afterlife, "Refill Afterlives", ::mob_refill_afterlives);
+		add_cfg_toggle(afterlife, "Force Mantle Spawn", "force_mantle_spawn");
+		create_option(afterlife, "Set Mantle Spawn: " + mob_mantle_spawn_text(), ::mob_set_mantle_spawn);
 
 	tomahawk = add_submenu(cheats, "tomahawk", "Tomahawk");
-		create_option(tomahawk, "Give tomahawk", ::mob_give_tomahawk);
-		create_option(tomahawk, "Fill wolves", ::mob_fill_wolves);
-		add_cfg_toggle(tomahawk, "Zero cooldown", "no_tomahawk_cooldown");
-		add_cfg_toggle(tomahawk, "Respawning skulls", "respawning_skull");
+		create_option(tomahawk, "Give Tomahawk", ::mob_give_tomahawk);
+		create_option(tomahawk, "Fill Wolves", ::mob_fill_wolves);
+		add_cfg_toggle(tomahawk, "Zero Cooldown", "no_tomahawk_cooldown");
+		add_cfg_toggle(tomahawk, "Respawning Skulls", "respawning_skull");
 }
 
 // Chat teleports: say a teleport name.
@@ -123,7 +123,6 @@ mob_run()
     level thread mob_wolves_hud();
     level thread mob_mana_hud();
     level thread mob_teleport_return_watcher();
-    level thread mob_spawn_probe_hud();
     level thread mob_force_mantle_spawn();
     if(is_true(level.is_forever_solo_game))
     {
@@ -373,6 +372,9 @@ mob_complete_key_quest()
 // Enters the nixie tube code (vanilla nixie_tube_add_code makes it a*100+b*10+c).
 mob_complete_code()
 {
+    // Vanilla rolls the code a moment into the game, after a fast setup gets here.
+    for(i = 0; i < 400 && !(isdefined(level.a_nixie_tube_solution) && isdefined(level.a_nixie_tube_solution[3])); i++)
+        wait 0.05;
     a = level.a_nixie_tube_solution[1];
     b = level.a_nixie_tube_solution[2];
     c = level.a_nixie_tube_solution[3];
@@ -483,7 +485,7 @@ mob_wolves_hud()
     huds = [];
     for(i = 0; i < 3; i++)
     {
-        huds[i] = createserverfontstring("hudsmall", 1.4);
+        huds[i] = createserverfontstring("default", 1.4);
         huds[i] setpoint("TOP", "CENTER", -40 + i * 40, -200);
         huds[i].label = labels[i];
         huds[i].alpha = 0;
@@ -728,7 +730,7 @@ mob_set_mantle_spawn()
     s_spawn = self.practice_last_afterlife_spawn;
     if(!isdefined(s_spawn))
     {
-        self iprintln("No afterlife spawn on a spawn spot yet");
+        self iprintln("No afterlife spawn yet");
         return;
     }
     level.base_cfg["mantle_spawn_x"] = int(s_spawn.origin[0]);
@@ -785,67 +787,8 @@ mob_force_mantle_spawn()
 
 mob_mantle_spawn_text()
 {
-    if(!get_cfg_int("mantle_spawn_set")) return "^1not set";
-    return "^3" + get_cfg_int("mantle_spawn_x") + " " + get_cfg_int("mantle_spawn_y") + " " + get_cfg_int("mantle_spawn_z");
-}
-
-// Temporary mapping probe: where a death right now would spawn the ghost: the
-// zone's spots with the pick marked, or the nearest group's spots with the
-// player's claimed one marked (else it is a random roll).
-mob_spawn_probe_hud()
-{
-    level endon("end_game");
-    hud = undefined;
-    text = "";
-    while(true)
-    {
-        player = get_players()[0];
-        if(!get_cfg_int("hud_spawn_probe") || !isdefined(player))
-        {
-            if(isdefined(hud)) hud destroy();
-            hud = undefined;
-            text = "";
-        }
-        else
-        {
-            if(!isdefined(hud))
-            {
-                hud = createserverfontstring("hudsmall", 1.1);
-                hud.alignx = "left";
-                hud.aligny = "top";
-                hud.horzalign = "left";
-                hud.vertalign = "middle";
-                hud.x = hud_edge_x("left", -62);
-                hud.y = -120;
-                hud.hidewheninmenu = 1;
-            }
-            prediction = player mob_predict_afterlife_spawn();
-            zone = "none";
-            if(isdefined(prediction.zone)) zone = prediction.zone;
-            if(isdefined(prediction.group))
-            {
-                new_text = "Zone " + zone + " has no spots; nearest group " + prediction.group.script_noteworthy + ":";
-                if(!isdefined(prediction.claimed)) new_text = new_text + " ^3random roll^7";
-            }
-            else
-                new_text = "Afterlife spawns in " + zone + ":";
-            marked = prediction.index;
-            if(isdefined(prediction.claimed)) marked = prediction.claimed;
-            for(i = 0; i < prediction.spawns.size; i++)
-            {
-                o = prediction.spawns[i].origin;
-                line = "#" + i + " (" + int(o[0]) + " " + int(o[1]) + " " + int(o[2]) + ") " + int(distance(player.origin, o));
-                if(isdefined(marked) && marked == i) line = "^2" + line + " <<^7";
-                new_text = new_text + "\n" + line;
-            }
-            if(new_text != text)
-            {
-                hud setTextUnlimited(new_text);
-                text = new_text;
-            }
-        }
-        wait 0.25;
-    }
+    if(!get_cfg_int("mantle_spawn_set")) return "^3not set";
+    return "^3set";
 }
 
 // Timescale 10 from boarding until 30 s after the crash, when the setting is on.

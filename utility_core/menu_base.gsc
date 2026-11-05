@@ -13,25 +13,38 @@
 ##############################################################################*/
 // HUD units from the screen center
 #define MENU_X              250     // Left edge 146, right edge 354.
-#define MENU_Y              -15     // Top edge -125, under the header; bottom edge 95.
+#define MENU_Y              -64     // Bottom edge 34.5: the last row's bar touches the border.
 #define MENU_WIDTH          208
-#define MENU_HEIGHT         220     // Last row (77) plus the same margin as the first row.
+#define MENU_HEIGHT         157
 #define MENU_BORDER         2
 #define MENU_LEFT           (MENU_X - MENU_WIDTH / 2)
 #define MENU_RIGHT          (MENU_X + MENU_WIDTH / 2)
 #define MENU_BOTTOM         (MENU_Y + MENU_HEIGHT / 2)
-#define MENU_HEADER_Y       -131
+#define MENU_HEADER_Y       -150
 #define MENU_HEADER_HEIGHT  18
 
 #define MENU_ROWS           9
-#define MENU_FIRST_ROW_Y    -107
-#define MENU_ROW_SPACING    23
-#define MENU_ARROW_OVERLAP  1.5     // How far each slash of a scroll arrow reaches past the centre.
+#define MENU_FIRST_ROW_Y    -132
+#define MENU_ROW_SPACING    17      // The font's own line height: all rows are one text.
 
-// Holding Enter on a long row
+// Holding frag on a long row. The action slot buttons cannot repeat: they read true
+// for one frame however long the key is held (live 2026-11-05). Frag reads as held,
+// and is free while the menu blocks offhands.
 #define MENU_HOLD_VALUES    10      // A row with this many values or more repeats.
 #define MENU_HOLD_DELAY     400     // Milliseconds held before the first repeat.
 #define MENU_HOLD_STEP      100     // Milliseconds between repeats.
+
+// Two presses on a row that asks first must be this far apart, so a double tap
+// cannot pass (milliseconds).
+#define MENU_ARM_DELAY      300
+
+#define MENU_HELP_WIDTH     MENU_WIDTH
+#define MENU_HELP_HEIGHT    83
+#define MENU_HELP_GAP       4       // Between the panel and the box under it.
+#define MENU_ICON_SIZE      56
+
+#define MENU_CURSOR_ALPHA   .45
+#define MENU_CURSOR_HEIGHT  17
 
 #define MENU_TEXT_COLOR        (1, 1, 1)
 #define MENU_BACKGROUND_COLOR  (0, 0, 0)
@@ -136,36 +149,57 @@ build_modes_menu(root)
 add_restore_defaults_option()
 {
 	if(!isDefined(self.menu.option_text["mapsettings"]) || !isDefined(level.mode_cfg_defaults)) return;
-	// Short: a long row runs past the menu's right edge.
-	if(is_true(self.menu.restore_armed))
-		create_option("presets", "^1Confirm Restore Defaults", ::restore_mode_defaults);
-	else
-		create_option("presets", "Restore " + level.mode.label + " Defaults", ::restore_mode_defaults);
+	// A mode without slots has no Presets menu.
+	menu = "presets";
+	if(!saveslots_available()) menu = "mapsettings";
+	create_confirm_option(menu, "Restore " + level.mode.label + " Defaults", "Confirm Restore Defaults", ::restore_mode_defaults);
 }
 
-// Leaving the row (cursor move, back) cancels a pending "Confirm Restore" or a
-// save slot's "Confirm Overwrite".
-disarm_restore()
+// A row that asks first: the first press arms it, a second press runs func.
+// Leaving the row cancels (menu_disarm). label and func stay with the row, keyed by
+// menu and label, because a row carries only two arguments.
+create_confirm_option(menu, label, confirm_label, func, arg1, arg2)
 {
-	if(!is_true(self.menu.restore_armed) && !isDefined(self.menu.saveslot_armed)) return;
-	self.menu.restore_armed = undefined;
-	self.menu.saveslot_armed = undefined;
+	id = menu + "/" + label;
+	confirm = spawnstruct();
+	confirm.func = func;
+	confirm.arg1 = arg1;
+	confirm.arg2 = arg2;
+	self.menu.confirm[id] = confirm;
+	if(isDefined(self.menu.armed) && self.menu.armed == id) label = "^1" + confirm_label;
+	create_option(menu, label, ::menu_confirm_press, id);
+}
+
+menu_confirm_press(id)
+{
+	if(!isDefined(self.menu.armed) || self.menu.armed != id)
+	{
+		self.menu.armed = id;
+		self.menu.armed_time = getTime();
+		self refresh_menu();
+		return;
+	}
+	if(getTime() - self.menu.armed_time < MENU_ARM_DELAY) return;
+	self.menu.armed = undefined;
+	confirm = self.menu.confirm[id];
+	self thread [[ confirm.func ]](confirm.arg1, confirm.arg2);
+	self refresh_menu();
+}
+
+menu_disarm()
+{
+	if(!isDefined(self.menu.armed)) return;
+	self.menu.armed = undefined;
 	self refresh_menu();
 }
 
 restore_mode_defaults()
 {
-	if(!is_true(self.menu.restore_armed))
-	{
-		self.menu.restore_armed = true;
-		self refresh_menu();
-		return;
-	}
-	self.menu.restore_armed = undefined;
 	fs_remove(level.mode_cfg_str);
 	level.mode_cfg = level.mode_cfg_defaults;
 	write_config(level.mode_cfg, level.mode_cfg_str);
-	self iprintln(level.mode.label + " settings restored to default");
+	if(isDefined(level.restore_slots)) [[ level.restore_slots ]](true);
+	self iprintln(level.mode.label + " defaults restored");
 	self refresh_menu();
 }
 
@@ -204,8 +238,9 @@ build_change_map_menu(parent)
 
 add_change_map_option(menu, label, map, location)
 {
+	confirm_label = "Confirm " + label;
 	if(getdvar("mapname") == map) label += " ^9[^3live^9]";
-	create_option(menu, label, ::change_map, map, location);
+	create_confirm_option(menu, label, confirm_label, ::change_map, map, location);
 }
 
 change_map(map, location)
@@ -215,7 +250,7 @@ change_map(map, location)
 		self iprintln("Only the host can change the map");
 		return;
 	}
-	self iprintln("Loading " + map + "...");
+	self iprintln("Loading...");
 	cmdexec("zmmap " + map + " " + location + " zclassic");
 }
 
@@ -224,9 +259,9 @@ build_general_menu(root)
 {
 	general = add_submenu(root, "general", "General");
 		self build_change_map_menu(general);
-		create_option(general, "Show Identifier/Hashes: " + cfgint_compare("show_identifier"), ::basegame_toggle_show_identifier);
-		add_cfg_choice(general, "Menu Key (with melee)", "menu_key", array("special grenade", "dpad slot 1"));
-		create_option(general, "Rage Quit", ::fast_quit);
+		create_option(general, "Identifier/Hashes: " + cfgint_compare("show_identifier"), ::basegame_toggle_show_identifier);
+		add_cfg_choice(general, "Menu Key", "menu_key", array("melee + special", "melee + slot 1"));
+		create_confirm_option(general, "Rage Quit", "Confirm Rage Quit", ::fast_quit);
 }
 
 // >Timer when the mode has one, core rows, the map's top rows (build_hud_top) after
@@ -242,17 +277,17 @@ build_hud_menu(root)
 		create_option(hud, "Speedometer: " + cfgint_compare("hud_speed"), ::cfg_toggle_speedometer);
 		if(isDefined(level.practice_map.build_hud_top))
 			self [[ level.practice_map.build_hud_top ]](hud);
-		oopa = array("^1off", "^2on");
+		oopa = array("^3off", "^2on");
 		if(isDefined(level.practice_map.oopa_hud_spot_label)) oopa[2] = "^3" + level.practice_map.oopa_hud_spot_label;
 		add_cfg_choice(hud, "OOPA Countdown", "hud_oopa", oopa);
-		add_cfg_choice(hud, "Point based", "hud_points", array("^1off", "^3relative", "^3absolute"));
+		add_cfg_choice(hud, "Point Drops", "hud_points", array("^3off", "^3relative", "^3absolute"));
 		add_cfg_toggle(hud, "Health Bar", "hud_health");
 		add_cfg_toggle(hud, "Current Zone", "hud_zone");
 		add_cfg_toggle(hud, "Active Zones", "hud_active_zones");
 	if(isDefined(level.practice_map.build_hud))
 		self [[ level.practice_map.build_hud ]](hud);
 	// Always the last row (user, 2026-11-02).
-	create_option(hud, "Active unit trigger: " + cfgint_compare("hud_unitrigger"), ::basegame_toggle_unitrigger_hud);
+	create_option(hud, "Active Trigger: " + cfgint_compare("hud_unitrigger"), ::basegame_toggle_unitrigger_hud);
 }
 
 // Core rows, then the map's rows (level.practice_map.build_cheats).
@@ -261,15 +296,15 @@ build_cheats_menu(root)
 	cheats = add_submenu(root, "cheats", "Cheats");
 		add_cfg_toggle(cheats, "OOPA Death", "oopa");
 		create_option(cheats, "Demigod: " + int_compare(self.demigod), ::toggle_demigod);
-		drops = add_submenu(cheats, "drops", "Give drop");
+		drops = add_submenu(cheats, "drops", "Give Drop");
 			add_drop_option(drops, "Nuke", "nuke");
 			add_drop_option(drops, "Max Ammo", "full_ammo");
 			add_drop_option(drops, "Double Points", "double_points");
-			add_drop_option(drops, "Insta kill", "insta_kill");
+			add_drop_option(drops, "Insta-Kill", "insta_kill");
 			add_drop_option(drops, "Zombie Blood", "zombie_blood");
 			add_drop_option(drops, "Fire Sale", "fire_sale");
 			add_drop_option(drops, "Blood Money", "bonus_points_player");
-		create_option(cheats, "Pap weapon", ::upgrade_weapon);
+		create_option(cheats, "PaP Weapon", ::upgrade_weapon);
 		create_option(cheats, "Max Points", ::set_points, 1000000);
 		create_option(cheats, "Open Doors", ::open_all_doors);
 	if(isDefined(level.practice_map.build_cheats))
@@ -399,16 +434,35 @@ initialize_menu()
 	self.menu.root = level.gamemode;
 	self.menu.current = self.menu.root;
 	self.demigod = 0;
+	// What the map loaded with, for Restart to apply (menu_restart_pending).
+	if(isDefined(level.mode_cfg) && !isDefined(level.mode_cfg_loaded)) level.mode_cfg_loaded = level.mode_cfg;
 
 	self build_menu_tree();
+	self menu_load_state();
 
 	while(true)
 	{
 		self menu_offhand_guard();
 		if(self menu_open()) self menu_clear_actionslots();
+		// The game ended its own ignoreme while the menu is open (Zombie Blood ran
+		// out): keep ignoring for now, and leave it off on close.
+		if(self menu_open() && !is_true(self.ignoreme))
+		{
+			self.menu.saved_ignoreme = false;
+			self.ignoreme = 1;
+		}
+		// A fresh melee press closes the menu from any depth. It stays on the same
+		// row, so opening it again goes back there.
+		if(self menu_open())
+		{
+			melee = self meleebuttonpressed();
+			if(melee && !is_true(self.menu.melee_held)) self close_menu();
+			self.menu.melee_held = melee;
+		}
 		if(get_open_buttons() && !isDefined(self.menu.open) && flag("menu_active"))
 		{
 			self thread open_menu();
+			self.menu.melee_held = true; // The open chord's melee does not close it.
 			wait .15;
 			// The open chord may share a button with the navigation: it acts only
 			// once released.
@@ -419,7 +473,7 @@ initialize_menu()
 			if(self actionslotfourbuttonpressed())
 			{
 				// Back: return to the parent menu, or close the menu at the top level.
-				self disarm_restore();
+				self menu_disarm();
 				parent = self.menu.parent[self.menu.current];
 				if(isDefined(parent))
 					self enter_menu(parent);
@@ -430,10 +484,10 @@ initialize_menu()
 			{
 				// Up and down pressed together cancel out.
 				self.menu.cursor[self.menu.current] += self actionslottwobuttonpressed() - self actionslotonebuttonpressed();
-				self disarm_restore();
+				self menu_disarm();
 				self update_scrollbar();
 			}
-			else if(self actionslotthreebuttonpressed())
+			else if(self actionslotthreebuttonpressed() || self fragbuttonpressed())
 			{
 				menu = self.menu.current;
 				index = self.menu.cursor[menu];
@@ -457,20 +511,23 @@ initialize_menu()
 	}
 }
 
-// Repeats a long row while Enter stays held. The rebuild runs every step, but the cfg
+// Repeats a long row while frag stays held. The rebuild runs every step, but the cfg
 // is written once, on release, so a hold does not rewrite the file ten times a second.
 menu_hold_steps(func, arg1, arg2)
 {
 	self.menu.holding_step = true;
 	self.menu.hold_unsaved = undefined;
-	next_step = getTime() + MENU_HOLD_DELAY;
+	// getTime runs with timescale (10 during a held setup): the hold keeps real time.
+	timescale = float(getdvar("timescale"));
+	if(timescale < 1) timescale = 1;
+	next_step = getTime() + MENU_HOLD_DELAY * timescale;
 
-	while(self menu_open() && self actionslotthreebuttonpressed())
+	while(self menu_open() && self fragbuttonpressed())
 	{
 		if(getTime() >= next_step)
 		{
 			self [[ func ]](arg1, arg2);
-			next_step = getTime() + MENU_HOLD_STEP;
+			next_step = getTime() + MENU_HOLD_STEP * timescale;
 		}
 		wait .05;
 	}
@@ -500,9 +557,16 @@ menu_offhand_guard()
 	}
 	else if(isDefined(self.menu.offhand_blocked))
 	{
-		self enableoffhandweapons();
+		// A perk drink or last stand holds its own block, and gives it back itself.
+		if(!self menu_offhand_held_by_game()) self enableoffhandweapons();
 		self.menu.offhand_blocked = undefined;
 	}
+}
+
+menu_offhand_held_by_game()
+{
+	if(isDefined(self.is_drinking) && self.is_drinking > 0) return true;
+	return self maps\mp\zombies\_zm_laststand::player_is_in_laststand();
 }
 
 menu_equipment_slot_guard(melee_held)
@@ -572,7 +636,7 @@ menu_restore_actionslots()
 
 menu_button_pressed()
 {
-	return self actionslotonebuttonpressed() || self actionslottwobuttonpressed() || self actionslotthreebuttonpressed() || self actionslotfourbuttonpressed();
+	return self actionslotonebuttonpressed() || self actionslottwobuttonpressed() || self actionslotthreebuttonpressed() || self actionslotfourbuttonpressed() || self fragbuttonpressed();
 }
 
 get_open_buttons()
@@ -596,8 +660,11 @@ menu_equipment_chord()
 	return menu_chord_slot() > 0;
 }
 
+// Zombies ignore the player while the menu is open. Closing gives back what the
+// game had set, so Zombie Blood and last stand keep theirs.
 open_menu()
 {
+	self.menu.saved_ignoreme = is_true(self.ignoreme);
 	self.ignoreme = 1;
 	self.menu.open = true;
 	self menu_clear_actionslots();
@@ -607,14 +674,11 @@ open_menu()
 
 close_menu()
 {
-	self.ignoreme = 0;
+	self.ignoreme = self.menu.saved_ignoreme;
 	self menu_restore_actionslots();
 	self.menu.open = undefined;
-	self.menu.restore_armed = undefined;
-	self.menu.saveslot_armed = undefined;
+	self.menu.armed = undefined;
 	self destroy_array(self.menu.hud);
-	for(row = 0; row < self.menu.rows.size; row++)
-		self.menu.rows[row] destroy();
 }
 
 menu_open()
@@ -637,38 +701,113 @@ refresh_menu()
 		saved_cursor[menu] = self.menu.cursor[menu];
 	self build_menu_tree();
 	foreach(menu in getArrayKeys(saved_cursor))
+	{
 		self.menu.cursor[menu] = saved_cursor[menu];
+		// A list that got shorter keeps the cursor on its last row.
+		if(isDefined(self.menu.option_text[menu]) && self.menu.option_text[menu].size > 0 && saved_cursor[menu] >= self.menu.option_text[menu].size)
+			self.menu.cursor[menu] = self.menu.option_text[menu].size - 1;
+	}
 	if(self menu_open())
 		self update_scrollbar();
 }
 
+// A mode setting differs from what the map loaded with.
+menu_restart_pending()
+{
+	if(!isDefined(level.mode_cfg) || !isDefined(level.mode_cfg_loaded)) return false;
+	foreach(key in getArrayKeys(level.mode_cfg))
+		if(!menu_cfg_applies_live(key) && (!isDefined(level.mode_cfg_loaded[key]) || "" + level.mode_cfg[key] != "" + level.mode_cfg_loaded[key])) return true;
+	return false;
+}
+
+// Mode settings that take effect at once, named by the map (live_cfg_keys).
+menu_cfg_applies_live(key)
+{
+	if(key == "timer_main" || key == "timer_segment") return true;
+	if(!isDefined(level.practice_map.live_cfg_keys)) return false;
+	foreach(live_key in level.practice_map.live_cfg_keys)
+		if(live_key == key) return true;
+	return false;
+}
+
+// The open menu and every row kept in a dvar, so they survive map_restart.
+menu_state_dvar()
+{
+	return level.practice_map.mode_dvar + "_state";
+}
+
+menu_save_state()
+{
+	state = level.gamemode + "|" + self.menu.current + "|";
+	foreach(menu in getArrayKeys(self.menu.cursor))
+		if(self.menu.cursor[menu] > 0) state += menu + "=" + self.menu.cursor[menu] + ",";
+	setDvar(menu_state_dvar(), state);
+}
+
+menu_load_state()
+{
+	parts = strtok(getDvar(menu_state_dvar()), "|");
+	if(parts.size < 2 || parts[0] != level.gamemode) return;
+	if(isDefined(self.menu.option_text[parts[1]]) && self.menu.option_text[parts[1]].size > 0) self.menu.current = parts[1];
+	if(parts.size < 3) return;
+	foreach(pair in strtok(parts[2], ","))
+	{
+		entry = strtok(pair, "=");
+		if(entry.size == 2 && isDefined(self.menu.cursor[entry[0]])) self.menu.cursor[entry[0]] = int(entry[1]);
+	}
+}
+
+// Adds " [tag]" to the row that opens menu.
+set_menu_tag(menu, tag)
+{
+	parent = self.menu.parent[menu];
+	for(row = 0; row < self.menu.option_text[parent].size; row++)
+		if(self.menu.option_func[parent][row] == ::enter_menu && self.menu.option_arg1[parent][row] == menu)
+			self.menu.option_text[parent][row] += " ^9[^3" + tag + "^9]";
+}
+
+// The game draws only so many HUD elements, and the player's own HUDs share them:
+// past the limit, rows and bars go missing (live 2026-11-05, at 36 here). The menu
+// stays at 12. So all rows are one text, and a frame is 2 elements, an accent rectangle
+// under a solid black one. Count before adding one.
+menu_draw_frame(name, left, right, top, bottom)
+{
+	x = (left + right) / 2;
+	y = (top + bottom) / 2;
+	// Whole numbers: the macros divide, and a shader size must be an int.
+	width = int(right - left);
+	height = int(bottom - top);
+	self.menu.hud[name + "Edge"] = self create_rectangle(x, y, width + MENU_BORDER, height + MENU_BORDER, level.practice_map.accent_color, "white", 0, 1);
+	self.menu.hud[name + "Back"] = self create_rectangle(x, y, width - MENU_BORDER, height - MENU_BORDER, MENU_BACKGROUND_COLOR, "white", 1, 1);
+}
+
 draw_menu()
 {
-	self.menu.hud["Background"] = self create_rectangle(MENU_X, MENU_Y, MENU_WIDTH, MENU_HEIGHT, MENU_BACKGROUND_COLOR, "lui_soldier", 0, .5);
-	self.menu.hud["Leftline"] = self create_rectangle(MENU_LEFT, MENU_Y, MENU_BORDER, MENU_HEIGHT, level.practice_map.accent_color, "white", 5, 1);
-	self.menu.hud["Rightline"] = self create_rectangle(MENU_RIGHT, MENU_Y, MENU_BORDER, MENU_HEIGHT, level.practice_map.accent_color, "white", 5, 1);
-	self.menu.hud["Bottomline"] = self create_rectangle(MENU_X, MENU_BOTTOM - MENU_BORDER / 2, MENU_WIDTH, MENU_BORDER, level.practice_map.accent_color, "white", 5, 1);
-	// Header bar, wide enough to cover both side borders.
-	self.menu.hud["Topline"] = self create_rectangle(MENU_X, MENU_HEADER_Y, MENU_WIDTH + MENU_BORDER, MENU_HEADER_HEIGHT, level.practice_map.accent_color, "white", 5, 1);
+	// One frame holds the header and the rows, a second the controls.
+	self menu_draw_frame("Help", MENU_LEFT, MENU_LEFT + MENU_HELP_WIDTH, MENU_BOTTOM + MENU_HELP_GAP, MENU_BOTTOM + MENU_HELP_GAP + MENU_HELP_HEIGHT);
+	self menu_draw_frame("Panel", MENU_LEFT, MENU_RIGHT, MENU_HEADER_Y - MENU_HEADER_HEIGHT / 2, MENU_BOTTOM - MENU_BORDER / 2);
+	self.menu.hud["Cursor"] = self create_rectangle(MENU_X, MENU_FIRST_ROW_Y, MENU_WIDTH - MENU_BORDER, MENU_CURSOR_HEIGHT, level.practice_map.cursor_color, "white", 2, MENU_CURSOR_ALPHA);
+	self.menu.hud["Header"] = self create_rectangle(MENU_X, MENU_HEADER_Y, MENU_WIDTH + MENU_BORDER, MENU_HEADER_HEIGHT, level.practice_map.accent_color, "white", 5, 1);
 
 	self.menu.hud["Title"] = self create_text(level.menu_title, "default", 1.4, "LEFT", MENU_LEFT + 4, MENU_HEADER_Y + 1, 1);
+	self.menu.hud["Title"].color = level.practice_map.header_text_color;
 	self.menu.hud["Title"].glowAlpha = 1;
 	self.menu.hud["Title"].glowColor = level.practice_map.accent_color;
 
 	// Right-aligned so a long submenu title never runs into the main title.
 	self.menu.hud["SubTitle"] = self create_text(self.menu.title[self.menu.current], "big", 1.5, "RIGHT", MENU_RIGHT - 4, MENU_HEADER_Y + 1, 0);
+	self.menu.hud["SubTitle"].color = level.practice_map.header_text_color;
 	self.menu.hud["SubTitle"] thread hud_fade(1, .1);
 
-	// Controls, under the window and aligned with its left edge (two lines).
-	self.menu.hud["Help"] = self create_text("^7UP/DOWN ^3[{+actionslot 1}]/[{+actionslot 2}]\n^7ENTER/EXIT ^3[{+actionslot 3}]/[{+actionslot 4}]", "small", 1.4, "TOPLEFT", MENU_LEFT, MENU_BOTTOM + 4, 1);
+	self.menu.hud["Help"] = self create_text("^7HOLD [^3[{+frag}]^7] REPEAT\n^7UP/DOWN [^3[{+actionslot 1}]^7]/[^3[{+actionslot 2}]^7]\n^7SELECT/EXIT [^3[{+actionslot 3}]^7]/[^3[{+actionslot 4}]^7]\n^7CLOSE [^3[{+melee}]^7]\n^3\"help\" ^7IN CHAT", "small", 1.2, "TOPLEFT", MENU_LEFT + 5, MENU_BOTTOM + MENU_HELP_GAP + 5, 1);
+	// The map's emblem, right of the controls.
+	if(isDefined(level.practice_map.menu_icon))
+		self.menu.hud["Icon"] = self create_rectangle(MENU_RIGHT - MENU_ICON_SIZE / 2 - 10, MENU_BOTTOM + MENU_HELP_GAP + MENU_HELP_HEIGHT / 2, MENU_ICON_SIZE, MENU_ICON_SIZE, MENU_TEXT_COLOR, level.practice_map.menu_icon, 6, 1);
 
-	for(row = 0; row < MENU_ROWS; row++)
-		self.menu.rows[row] = self create_text("", "small", 1.4, "LEFT", MENU_LEFT + 7, MENU_FIRST_ROW_Y + row * MENU_ROW_SPACING, 1);
+	self.menu.hud["Rows"] = self create_text("", "objective", 1.4, "TOPLEFT", MENU_LEFT + 7, MENU_FIRST_ROW_Y - MENU_ROW_SPACING / 2, 1);
 
-	// More options above or below the visible rows, on the first and last row
-	// lines (update_scrollbar shows them).
-	self.menu.hud["MoreUp"] = self create_arrow(MENU_RIGHT - 12, MENU_FIRST_ROW_Y, true);
-	self.menu.hud["MoreDown"] = self create_arrow(MENU_RIGHT - 12, MENU_FIRST_ROW_Y + (MENU_ROWS - 1) * MENU_ROW_SPACING, false);
+	// "5/13" on a list longer than the visible rows, in the last row's right corner.
+	self.menu.hud["Position"] = self create_text("", "small", 1.2, "RIGHT", MENU_RIGHT - 6, MENU_FIRST_ROW_Y + (MENU_ROWS - 1) * MENU_ROW_SPACING, 1);
 }
 
 update_scrollbar()
@@ -686,39 +825,30 @@ update_scrollbar()
 	if(first > count - MENU_ROWS) first = count - MENU_ROWS;
 	if(first < 0) first = 0;
 
+	// One text for all rows. ^7 each line: a colour carries over the newline.
+	text = "";
 	for(row = 0; row < MENU_ROWS; row++)
 	{
 		index = first + row;
-		text = "";
-		if(isDefined(self.menu.option_text[menu][index])) text = self.menu.option_text[menu][index];
-		self.menu.rows[row] setTextUnlimited(text);
+		if(isDefined(self.menu.option_text[menu][index])) text += "^7" + self.menu.option_text[menu][index];
+		text += "\n";
 
-		if(index == cursor) self.menu.rows[row].color = level.practice_map.accent_color;
-		else self.menu.rows[row].color = MENU_TEXT_COLOR;
+		if(index == cursor && isDefined(self.menu.hud["Cursor"]))
+			self.menu.hud["Cursor"] setPoint("CENTER", "CENTER", MENU_X, MENU_FIRST_ROW_Y + row * MENU_ROW_SPACING);
 	}
+	if(isDefined(self.menu.hud["Rows"])) self.menu.hud["Rows"] setTextUnlimited(text);
 
-	if(!isDefined(self.menu.hud["MoreUp"])) return;
-	foreach(bar in self.menu.hud["MoreUp"]) bar.alpha = int(first > 0);
-	foreach(bar in self.menu.hud["MoreDown"]) bar.alpha = int(first + MENU_ROWS < count);
-}
+	self menu_save_state();
+	if(!isDefined(self.menu.hud["Position"])) return;
 
-// A "/\" or "\/" arrow centred on (x, y). Typed as one string the font's spacing
-// leaves a gap at the point, so each slash is its own text piece, pushed together
-// by MENU_ARROW_OVERLAP until the strokes meet. Returns both halves
-// (destroy_array handles arrays).
-create_arrow(x, y, pointing_up)
-{
-	left = "/";
-	right = "\\";
-	if(!pointing_up)
-	{
-		left = "\\";
-		right = "/";
-	}
-	halves = [];
-	halves[0] = self create_text(left, "small", 1.2, "RIGHT", x + MENU_ARROW_OVERLAP, y, 0);
-	halves[1] = self create_text(right, "small", 1.2, "LEFT", x - MENU_ARROW_OVERLAP, y, 0);
-	return halves;
+	position = "";
+	if(count > MENU_ROWS) position = "^3" + (cursor + 1) + "/" + count;
+	self.menu.hud["Position"] setTextUnlimited(position);
+
+	// The title makes way for the note: no element of its own.
+	title = level.menu_title;
+	if(menu_restart_pending()) title = "Restart to apply";
+	self.menu.hud["Title"] setTextUnlimited(title);
 }
 
 // Menu text, positioned from the screen center.

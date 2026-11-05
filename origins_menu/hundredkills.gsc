@@ -43,11 +43,12 @@ hundredkills_initialize()
 {
     // Start time presets: 31:00 to 35:00, every 5 seconds, 33:00 by default. A
     // guess at the run clock when the kills start (Ending prac guesses 29:00 for
-    // the fire link): set it to the real one. Custom time: 29 to 39 minutes.
-    shared_start_time_add("release", "release", "Release", "31:00", "35:00", 5, "33:00", 29, 39);
+    // the fire link): set it to the real one.
+    shared_start_time_add("release", "release", "Release", "31:00", "35:00", 5, "33:00");
     puzzle_rng_install(PUZZLE_RNG_CHAMBER);
     level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();
     mode_cfg_load("hundredkills", hundredkills_default_cfg());
+    level.mode.no_slots = true;
     // The STG is always acquired here (user, 2026-11-04): an old cfg's "no" loads as plain.
     if(get_cfg_int("stg_start") == STG_NO) level.mode_cfg["stg_start"] = STG_YES;
     // No Trio skip setting (user, 2026-11-04): an old cfg's value is ignored.
@@ -81,6 +82,7 @@ hundredkills_templar_round()
 hundredkills_segment()
 {
     segment = shared_segment();
+    segment.required_items = shared_required_items(array(WIND));
     segment.split = SPLIT_FREEDOM;
     // A fresh round: round_zombies stays undefined.
     segment.round = get_cfg_int("kills_round");
@@ -188,33 +190,23 @@ hundredkills_remove_biplane()
 ##############################################################################*/
 hundredkills_build_menu(root)
 {
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
         self shared_start_time_menu(settings);
         create_option(settings, "Round: ^3" + get_cfg_int("kills_round"), ::cfg_increment_int, "kills_round", array(16, 17));
 
-    self shared_build_categories(root);
-    stg_text = "^1off";
-    if(get_cfg_int("stg_start") == STG_PAPPED) stg_text = "^2on";
-    create_option("loadout", "STG PaP: " + stg_text, ::hundredkills_stg_toggle);
-    self shared_boomhilda_menu("loadout");
+    // Everything sits in the one menu, and the mode has no save slots (user, 2026-11-05).
+    shared_add_stg_choice(settings, true);
+    self shared_boomhilda_menu(settings);
 
     // The Raise Hell visit's walls (puzzle_rng): up to two staffs the wall
     // never lands on (user, 2026-11-04).
     names = puzzle_rng_chamber_names();
     choices = array("none", names[0], names[1], names[2], names[3]);
-    add_cfg_choice("puzzles", "Clear wall", "chamber_v" + KILLS_WALLS_VISIT + "_a", choices);
-    add_cfg_choice("puzzles", "Clear wall", "chamber_v" + KILLS_WALLS_VISIT + "_b", choices);
+    add_cfg_choice(settings, "Clear Staff 1", "chamber_v" + KILLS_WALLS_VISIT + "_a", choices);
+    add_cfg_choice(settings, "Clear Staff 2", "chamber_v" + KILLS_WALLS_VISIT + "_b", choices);
 
     // No Panzer or robot menus (user, 2026-11-04): the segment needs neither.
-    add_cfg_choice("special_ai", "Templars", "kills_templar", array("no", "round 16", "round 17", "random"));
-}
-
-// "STG PaP": the STG is always acquired, plain or upgraded.
-hundredkills_stg_toggle()
-{
-    value = STG_PAPPED;
-    if(get_cfg_int("stg_start") == STG_PAPPED) value = STG_YES;
-    self cfg_set_int("stg_start", value);
+    add_cfg_choice(settings, "Templars", "kills_templar", array("none", "round 16", "round 17", "random"));
 }
 
 hundredkills_default_cfg()
@@ -222,7 +214,7 @@ hundredkills_default_cfg()
     settings_ar = [];
 
     settings_ar["kills_round"] = 16;
-    settings_ar["stg_start"] = STG_PAPPED; // "STG PaP": STG_YES or STG_PAPPED.
+    settings_ar["stg_start"] = STG_PAPPED; // STG_YES or STG_PAPPED.
     settings_ar["kills_templar"] = KILLS_TEMPLAR_NONE; // "Templars": 0 no, 1 round 16, 2 round 17, 3 random.
     settings_ar = shared_boomhilda_defaults(settings_ar);
     settings_ar = shared_start_time_defaults(settings_ar);

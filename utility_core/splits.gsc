@@ -152,12 +152,55 @@ practice_start_time_seconds()
 // Adds "<label>" and its Custom submenu to a mode's settings menu.
 practice_start_time_menu(menu)
 {
-    create_option(menu, level.start_time.label + ": ^3" + practice_seconds_to_time_text(practice_start_time_seconds()), ::practice_start_time_next_preset);
+    time_text = practice_seconds_to_time_text(practice_start_time_seconds());
+    if(get_cfg_int("custom_start")) time_text += " ^7(custom)";
+    create_option(menu, level.start_time.label + ": ^3" + time_text, ::practice_start_time_next_preset);
 
     custom = add_submenu(menu, "custom_start", "Custom " + level.start_time.label);
         add_cfg_toggle(custom, "Enabled", "custom_start");
-        create_option(custom, "Minutes: ^3" + get_cfg_int("custom_start_minutes"), ::cfg_increment_held, "custom_start_minutes", array(0, 59));
-        create_option(custom, "Seconds: ^3" + get_cfg_int("custom_start_seconds"), ::cfg_increment_int, "custom_start_seconds", array(0, 59));
+        create_option(custom, "Minutes: ^3" + get_cfg_int("custom_start_minutes"), ::practice_custom_time_step, "custom_start_minutes", array(0, 59));
+        create_option(custom, "Seconds: ^3" + get_cfg_int("custom_start_seconds"), ::practice_custom_time_step, "custom_start_seconds", array(0, 59));
+}
+
+// Menu action: editing a custom time turns it on.
+practice_custom_time_step(setting, range)
+{
+    level.mode_cfg["custom_start"] = 1;
+    self cfg_increment_held(setting, range);
+}
+
+// Chat "time 18:07": turns on that custom start time. A map with its own start
+// times sets them through level.practice_map.set_start_time.
+practice_time_say_command(message)
+{
+    words = strtok(message, " ");
+    if(!words.size || words[0] != "time") return false;
+    parts = [];
+    if(words.size == 2) parts = strtok(words[1], ":");
+    if(parts.size != 2 || parts[1].size != 2 || "" + int(parts[0]) != parts[0])
+    {
+        self iprintln("^3time <minutes:seconds>^7: sets a custom start time, like ^318:07");
+        return true;
+    }
+    minutes = int(parts[0]);
+    seconds = int(parts[1]);
+    done = false;
+    if(minutes >= 0 && minutes < 60 && seconds >= 0 && seconds < 60)
+    {
+        if(isDefined(level.practice_map.set_start_time)) done = self [[ level.practice_map.set_start_time ]](minutes, seconds);
+        else if(isDefined(level.start_time))
+        {
+            level.mode_cfg["custom_start"] = 1;
+            level.mode_cfg["custom_start_minutes"] = minutes;
+            level.mode_cfg["custom_start_seconds"] = seconds;
+            write_config(level.mode_cfg, level.mode_cfg_str);
+            self refresh_menu();
+            done = true;
+        }
+    }
+    if(done) self iprintln("Start time ^3" + words[1]);
+    else self iprintln("This mode has no start time");
+    return true;
 }
 
 // Menu action: turns the custom time off and moves to the next preset, back to

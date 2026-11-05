@@ -8,6 +8,7 @@
 
 #include scripts\zm\utility_core\menu_base;
 #include scripts\zm\utility_core\menu_utility;
+#include scripts\zm\utility_core\saveslots;
 #include scripts\zm\origins_menu\origins;
 #include scripts\zm\origins_menu\segmentutil;
 #include scripts\zm\origins_menu\puzzlerng;
@@ -39,7 +40,7 @@ fullgame_initialize()
 	flag_init("fullgame_fist_of_iron_nuke_dropped");
 	flag_clear("fullgame_fist_of_iron_nuke_dropped");
 
-	level.cycle_string = "awaiting robot cycle";
+	level.cycle_string = "Awaiting Robot Cycle";
 	level.first_dig_list = array("random", "bonus_points_player", "nuke", "double_points", "zombie_blood", "ballista_zm", "c96_zm", "870mcs_zm", "dsr50_zm", "srm1216_zm");
 	level.robot_cycle = 0;
 	level.n_disc_scrambles = 0; // First mound opening selects disc_1; each orb step selects the next.
@@ -48,6 +49,8 @@ fullgame_initialize()
 	// Crazy Place visits of the route (user, 2026-11-02), Crazy Place Walls menu.
 	level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();
 	mode_cfg_load("fullgame", fullgame_default_cfg());
+	level.restore_slots = ::fullgame_fill_slots;
+	fullgame_fill_slots(false);
 	shared_schedules_init(10);
 }
 
@@ -328,13 +331,8 @@ fullgame_box_hit_weights(keys)
 
 fullgame_build_menu(root)
 {
-	settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
+	settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
 		add_cfg_toggle(settings, "Super Fast Restarts", "turbo_restarts"); // Other modes handle setup timescale themselves.
-
-	create_option("presets", "Normal 29 rng", ::fullgame_apply_preset, "normal");
-	create_option("presets", "Perfect 29 rng", ::fullgame_apply_preset, "perfect");
-	create_option("presets", "Fast 4 box slushie", ::fullgame_apply_preset, "slushie");
-	create_option("presets", "Fast 4 box snowy", ::fullgame_apply_preset, "snowy");
 
 	self shared_build_categories(root);
 	self shared_build_parts_menu("loadout");
@@ -352,7 +350,7 @@ fullgame_build_menu(root)
 			add_cfg_toggle(digs, "Trenches", "bunker_dig", "^3early", "^3normal");
 			add_cfg_toggle(digs, "NML", "nml_dig", "^3early", "^3normal");
 			add_cfg_toggle(digs, "Church", "village_dig", "^3early", "^3normal");
-			add_cfg_choice(digs, "First Dig", "1st_dig", array("random", "blood money", "nuke", "double points", "zombie blood", "ballista", "mauser", "remington", "DSR50", "M1216"));
+			add_cfg_choice(digs, "First Dig", "1st_dig", array("random", "Blood Money", "Nuke", "Double Points", "Zombie Blood", "Ballista", "Mauser", "Remington", "DSR 50", "M1216"));
 			add_cfg_toggle(digs, "Ending Blood", "blood_dig");
 			add_cfg_toggle(digs, "Round 10 Spots", "r10_digs");
 			add_cfg_toggle(digs, "Ending Spots", "ending_digs");
@@ -362,20 +360,20 @@ fullgame_build_menu(root)
 
 		box = add_submenu(randomness, "box", "Mystery Box", "Box");
 			add_cfg_choice(box, "Location", "box_location", array("random", "gen 3", "gen 2"));
-			add_cfg_choice(box, "Box tier", "box_tier", array("normal", "S", "A", "B", "C", "D", "MK2"));
-			add_cfg_toggle(box, "MP40 no-stock", "box_no_stock_mp40");
+			add_cfg_choice(box, "Box Tier", "box_tier", array("normal", "S", "A", "B", "C", "D", "MK2"));
+			add_cfg_toggle(box, "MP40 No Stock", "box_no_stock_mp40");
 			box_guns = fullgame_box_hit_options();
 			add_cfg_choice(box, "Hit 1", "box_hit_1", box_guns.labels);
 			add_cfg_choice(box, "Hit 2", "box_hit_2", box_guns.labels);
 
 		fizz = add_submenu(randomness, "fizz", "Wunderfizz", "Fizz");
-			perks = array("^1r^3a^2n^5d^4o^1m ^3p^2e^5r^4k", "^3double tap", "^2speed cola", "^8deadshot", "^1juggernog", "^3stamin-up", "^2mule kick", "^6PhD flopper", "^9electric cherry", "^5quick revive");
+			perks = array("^1r^3a^2n^5d^4o^1m ^3p^2e^5r^4k", "^3Double Tap", "^2Speed Cola", "^8Deadshot", "^1Juggernog", "^3Stamin-Up", "^2Mule Kick", "^6PhD Flopper", "^9Electric Cherry", "^5Quick Revive");
 			add_cfg_choice(fizz, "Location", "fizz_location", array("random", "gen 4", "gen 5"));
 			add_cfg_choice(fizz, "Fizz 1", "fizz_1", perks);
 			add_cfg_choice(fizz, "Fizz 2", "fizz_2", perks);
 
-		powerups = add_submenu(randomness, "powerups", "Powerups");
-			add_cfg_choice(powerups, "First Powerup", "fullgame_first_powerup", array("random", "nuke", "double points", "max ammo", "zombie blood", "insta kill"));
+		powerups = add_submenu(randomness, "powerups", "Drops");
+			add_cfg_choice(powerups, "First Drop", "fullgame_first_powerup", array("random", "Nuke", "Double Points", "Max Ammo", "Zombie Blood", "Insta-Kill"));
 			add_cfg_toggle(powerups, "Fist of Iron Nuke", "fullgame_fist_of_iron_nuke");
 }
 
@@ -390,37 +388,30 @@ fullgame_all_random_cycles()
 }
 
 
-// Game presets. A preset resets every RNG setting to the Normal 29 rng values (the
-// mode's defaults), then applies its own. Timer, split, cycle display and Super
-// Fast Restarts settings are not RNG and stay as they are.
-fullgame_apply_preset(preset)
+// Game presets start in the save slots. An empty slot gets its preset at load, and
+// Restore Defaults puts all four back over whatever the slots hold (user, 2026-11-05).
+fullgame_fill_slots(overwrite)
+{
+	presets = array("normal", "perfect", "slushie", "snowy");
+	names = array("Normal 29 RNG", "Perfect 29 RNG", "Fast 4 Box Slushie", "Fast 4 Box Snowy");
+	for(i = 0; i < presets.size; i++)
+	{
+		slot = i + 1;
+		if(!overwrite && fs_testfile(saveslot_file(slot))) continue;
+		saved = fullgame_preset_cfg(presets[i]);
+		saved["slot_name"] = names[i];
+		saveslot_put(slot, saved);
+	}
+}
+
+// A preset is the mode's defaults (the Normal 29 RNG values) with its own on top.
+fullgame_preset_cfg(preset)
 {
 	cfg = fullgame_default_cfg();
-	label = "Normal 29 rng";
-	if(preset == "perfect")
-	{
-		cfg = fullgame_preset_perfect(cfg);
-		label = "Perfect 29 rng";
-	}
-	else if(preset == "snowy")
-	{
-		cfg = fullgame_preset_snowy(cfg);
-		label = "Fast 4 box snowy";
-	}
-	else if(preset == "slushie")
-	{
-		cfg = fullgame_preset_slushie(cfg);
-		label = "Fast 4 box slushie";
-	}
-
-	foreach(key in getArrayKeys(cfg))
-	{
-		if(key == "turbo_restarts" || key == "cycle_tracker" || key == "cycle_tracker_ms" || key == "split_nml") continue;
-		level.mode_cfg[key] = cfg[key];
-	}
-	write_config(level.mode_cfg, level.mode_cfg_str);
-	self iprintln("Preset: " + label);
-	self refresh_menu();
+	if(preset == "perfect") return fullgame_preset_perfect(cfg);
+	if(preset == "snowy") return fullgame_preset_snowy(cfg);
+	if(preset == "slushie") return fullgame_preset_slushie(cfg);
+	return cfg;
 }
 
 // From the saved cfg prefect_29_fullgame.cfg (2026-10-29). Robot 0 Odin, 1 Thor,

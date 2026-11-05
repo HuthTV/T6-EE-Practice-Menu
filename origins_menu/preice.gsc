@@ -35,12 +35,9 @@
 
 preice_initialize()
 {
-    // Start Times, every 5 seconds. Craft (floor and mule): 12:30 to 14:30, 13:30
-    // by default, Custom 12 to 20 minutes, STG the same for now. The STG time is
-    // a guess: set it to the real one.
-    shared_start_time_add("craft", "craft", "Craft", "12:30", "14:30", 5, "13:30", 12, 20);
-    shared_start_time_add("stg", "craft", "Craft", "12:30", "14:30", 5, "13:30", 12, 20);
-    level.start_time_choices = ::preice_start_time_choices;
+    // Start Times on the Ice craft, every 5 seconds. Floor and mule share one, STG
+    // has its own, the same for now.
+    shared_start_time_add("craft", "craft", "Craft", ICE_CRAFT_MIN, ICE_CRAFT_MAX, 5, ICE_CRAFT_DEFAULT);
     puzzle_rng_install(PUZZLE_RNG_ICE);
     level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();
     mode_cfg_load("preice", preice_default_cfg());
@@ -54,13 +51,6 @@ preice_initialize()
     flag_clear("preice_ready");
     shared_segment_install(preice_segment());
     shared_set_round(10, 1); // Install before native startup enters its callback.
-}
-
-// level.start_time_choices: floor and mule share the craft's time, STG has its own.
-preice_start_time_choices()
-{
-    if(get_cfg_int("start_loc") == PREICE_LOC_STG) return array("stg");
-    return array("craft");
 }
 
 preice_segment()
@@ -217,15 +207,15 @@ preice_auto_round_end()
 ##############################################################################*/
 preice_build_menu(root)
 {
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
         shared_add_location_choice(settings, "start_loc", array(PREICE_LOC_FLOOR, PREICE_LOC_MULE, PREICE_LOC_STG), array("floor", "mule", "STG"));
         self shared_start_time_menu(settings);
         add_cfg_toggle(settings, "R2L Route", "r2l");
         // Cycle 1 Foot picks the second bunker door: only R2L has a choice.
-        if(get_cfg_int("r2l")) add_cfg_choice(settings, "Cycle 1 Foot", "trench_path", array("random", "gen2", "gen3"));
+        if(get_cfg_int("r2l")) add_cfg_choice(settings, "Cycle 1 Foot", "trench_path", array("random", "gen 2", "gen 3"));
         add_cfg_toggle(settings, "Gram", "early_gram", "^2in hand", "^3placed");
-        add_cfg_toggle(settings, "Auto round end", "auto_round_end");
-        if(get_cfg_int("auto_round_end")) create_option(settings, "Auto round end delay: ^3" + get_cfg_int("auto_round_end_delay") + "s", ::cfg_increment_int, "auto_round_end_delay", array(1, 10));
+        add_cfg_toggle(settings, "Auto Round End", "auto_round_end");
+        if(get_cfg_int("auto_round_end")) create_option(settings, "Auto End Delay: ^3" + get_cfg_int("auto_round_end_delay") + "s", ::cfg_increment_int, "auto_round_end_delay", array(1, 10));
 
     self shared_build_categories(root);
     self shared_add_item_rows("loadout");

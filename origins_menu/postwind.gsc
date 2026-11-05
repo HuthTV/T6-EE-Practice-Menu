@@ -31,11 +31,11 @@
 
 postwind_initialize()
 {
-    // Start Times, every 5 seconds: 18:00 to 20:00, 19:00 by default (guesses at
-    // when the smokes come in a run), Custom 16 to 26 minutes. Mound starts at the
-    // spawn (release), portal enter in the Wind portal's teleport (user, 2026-11-02).
-    shared_start_time_add("bulbs_mound", "release", "Spawn", "18:00", "20:00", 5, "19:00", 16, 26);
-    shared_start_time_add("bulbs_enter", "portal", "Portal", "18:00", "20:00", 5, "19:00", 16, 26);
+    // Start Times, every 5 seconds: the Wind craft's until the real ones are known
+    // (user, 2026-11-05). Mound starts at the spawn (release), portal enter in the
+    // Wind portal's teleport (user, 2026-11-02).
+    shared_start_time_add("bulbs_mound", "release", "Spawn", WIND_CRAFT_MIN, WIND_CRAFT_MAX, 5, WIND_CRAFT_DEFAULT);
+    shared_start_time_add("bulbs_enter", "portal", "Portal", WIND_CRAFT_MIN, WIND_CRAFT_MAX, 5, WIND_CRAFT_DEFAULT);
     level.start_time_choices = ::postwind_start_time_choices;
     puzzle_rng_install(PUZZLE_RNG_WIND);
     level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();
@@ -57,6 +57,7 @@ postwind_start_time_choices()
 postwind_segment()
 {
     segment = shared_segment();
+    segment.required_items = shared_required_items(array(WIND));
     segment.split = SPLIT_FIRE;
     segment.round = get_cfg_int("bulbs_round");
     segment.round_zombies_keys = array("bulbs_round", "bulbs_zombies"); // Counted once the player is in.
@@ -67,6 +68,9 @@ postwind_segment()
     segment.gems = array(ICE, FIRE, WIND);
     segment.spots = shared_start_spots(CRAFT_WIND_ORIGIN, CRAFT_WIND_ANGLES, EXIT_WIND_ORIGIN, EXIT_WIND_ANGLES);
     segment.use_exit = false;
+    // Scramble II is the Ice orb's, and postwind_align_discs overrides it.
+    segment.first_scramble = 3;
+    segment.drone_option = true;
     segment.setup = ::postwind_setup;
     // Portal enter: the clock waits for the teleport place_player runs.
     segment.start_time_before_place = get_cfg_int("wind_spawn") == POSTWIND_LOC_ENTER;
@@ -78,7 +82,9 @@ postwind_setup()
 {
     self shared_staff_setup_start();
     self shared_portals_begin(WIND, level.segment.use_exit, false); // Opens while the rest of the setup runs.
-    self shared_complete_staff(ICE, 0);
+    souls = get_cfg_int("ice_souls");
+    if(souls > ICE_SOULS_MAX) souls = ICE_SOULS_MAX;
+    self shared_complete_staff(ICE, souls);
 
     // The Wind staff, crafted and taken the way shared_complete_staff does it.
     self shared_get_staff_pieces(WIND);
@@ -101,7 +107,7 @@ postwind_align_discs()
     position = maps\mp\zm_tomb_quest_crypt::chamber_disc_get_gem_position("crypt_gem_air");
     discs = getentarray("crypt_puzzle_disc", "script_noteworthy");
     foreach(disc in discs)
-        if(disc.targetname != "crypt_puzzle_disc_main") disc.position = position;
+        if(!isdefined(disc.targetname) || disc.targetname != "crypt_puzzle_disc_main") disc.position = position;
     shared_set_discs_silent(discs);
     level notify("crypt_disc_rotation");
 }
@@ -157,7 +163,7 @@ postwind_place_player()
 ##############################################################################*/
 postwind_build_menu(root)
 {
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
         shared_add_location_choice(settings, "wind_spawn", array(POSTWIND_LOC_MOUND, POSTWIND_LOC_ENTER), array("mound bulbs", "portal enter"));
         self shared_start_time_menu(settings);
         create_option(settings, "Round: ^3" + get_cfg_int("bulbs_round"), ::cfg_increment_int, "bulbs_round", array(11, 12));
@@ -166,17 +172,18 @@ postwind_build_menu(root)
     self shared_build_categories(root);
     shared_add_stg_choice("loadout");
     self shared_boomhilda_menu("loadout");
+    self shared_add_item_rows("loadout");
+    shared_add_ice_souls_row("puzzles");
 
     // Setup solves the rings, so Wind Rings holds only the smokes here.
     level.puzzle_rng_solved["wind"] = true;
     wind = add_submenu("puzzles", "wind_rings", "Wind Rings");
-        add_cfg_toggle(wind, "Smoke 1", "bulbs_smoke_1", "^2completed", "^1incomplete");
-        add_cfg_toggle(wind, "Smoke 2", "bulbs_smoke_2", "^2completed", "^1incomplete");
-        add_cfg_toggle(wind, "Smoke 3", "bulbs_smoke_3", "^2completed", "^1incomplete");
-    self puzzle_rng_build_menus("puzzles");
+        add_cfg_toggle(wind, "Smoke 1", "bulbs_smoke_1", "^2completed", "^3incomplete");
+        add_cfg_toggle(wind, "Smoke 2", "bulbs_smoke_2", "^2completed", "^3incomplete");
+        add_cfg_toggle(wind, "Smoke 3", "bulbs_smoke_3", "^2completed", "^3incomplete");
 
-    add_cfg_toggle("special_ai", "Trio skip", "trioskip");
-    self shared_build_ai_menus();
+    add_cfg_toggle("special_ai", "Trio Skip", "trioskip");
+    self shared_build_segment_menus(false, true);
 }
 
 postwind_default_cfg()
@@ -186,6 +193,8 @@ postwind_default_cfg()
     settings_ar["wind_spawn"] = POSTWIND_LOC_MOUND; // Start Location (POSTWIND_LOC_*).
     settings_ar["stg_start"] = STG_NO; // STG acquired: STG_NO, STG_YES or STG_PAPPED.
     settings_ar = shared_boomhilda_defaults(settings_ar);
+    settings_ar["ice_souls"] = 0;  // "Ice prefills" (0 to ICE_SOULS_MAX).
+    settings_ar["skip_first_disc"] = 0;
     settings_ar["bulbs_round"] = 12;
     settings_ar["bulbs_zombies"] = 20; // Zombies left in the round.
     settings_ar["bulbs_smoke_1"] = 1; // The first smoke done by default (user, 2026-11-02).
@@ -200,7 +209,7 @@ postwind_default_cfg()
     settings_ar = shared_schedule_defaults(settings_ar);
     settings_ar = shared_relay_defaults(settings_ar, true);
     settings_ar = shared_robot_defaults(settings_ar, FOOT_LEFT);
-    settings_ar = shared_disc_defaults(settings_ar, 2);
+    settings_ar = shared_disc_defaults(settings_ar, 3);
     settings_ar = puzzle_rng_defaults(settings_ar);
     return settings_ar;
 }

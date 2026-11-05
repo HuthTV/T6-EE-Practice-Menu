@@ -53,7 +53,7 @@ victis_initialize()
 victis_build_menu(root)
 {
     victis = add_submenu(root, "victis", "Victis Settings", "Victis");
-        create_option(victis, "Madeup scripts: " + cfgint_compare("victis_madeup"), ::victis_toggle_madeup);
+        create_option(victis, "Madeup Scripts: " + cfgint_compare("victis_madeup"), ::victis_toggle_madeup);
 
         perks = add_submenu(victis, "victis_permaperks", "Permaperks");
             foreach(key in victis_permaperk_keys())
@@ -179,19 +179,19 @@ victis_fridge_options()
     victis_add_option(options, "svu_zm", "SVU");
     victis_add_option(options, "svu_upgraded_zm+vzoom", "SVU PaP");
     victis_add_option(options, "tar21_upgraded_zm+mms", "MTAR PaP (MMS)");
-    victis_add_option(options, "tar21_upgraded_zm+reflex", "MTAR PaP (reflex)");
+    victis_add_option(options, "tar21_upgraded_zm+reflex", "MTAR PaP (Reflex)");
     victis_add_option(options, "mp5k_zm", "MP5");
     victis_add_option(options, "mp5k_upgraded_zm", "MP5 PaP");
-    victis_add_option(options, "an94_upgraded_zm+mms", "AN-94 PaP (MMS)");
+    victis_add_option(options, "an94_upgraded_zm+mms", "AN-94 PaP");
     victis_add_option(options, "galil_upgraded_zm+reflex", "Galil PaP");
-    victis_add_option(options, "saritch_upgraded_zm+mms", "SMR PaP (MMS)");
+    victis_add_option(options, "saritch_upgraded_zm+mms", "SMR PaP");
     victis_add_option(options, "hamr_upgraded_zm+reflex", "HAMR PaP");
     victis_add_option(options, "rpd_upgraded_zm", "RPD PaP");
     victis_add_option(options, "m32_upgraded_zm", "War Machine PaP");
     victis_add_option(options, "rnma_upgraded_zm", "Remington PaP");
-    victis_add_option(options, "pdw57_upgraded_zm+mms", "PDW-57 PaP (MMS)");
-    victis_add_option(options, "type95_upgraded_zm+mms", "Type 25 PaP (MMS)");
-    victis_add_option(options, "xm8_upgraded_zm+mms", "M8A1 PaP (MMS)");
+    victis_add_option(options, "pdw57_upgraded_zm+mms", "PDW-57 PaP");
+    victis_add_option(options, "type95_upgraded_zm+mms", "Type 25 PaP");
+    victis_add_option(options, "xm8_upgraded_zm+mms", "M8A1 PaP");
     return options;
 }
 

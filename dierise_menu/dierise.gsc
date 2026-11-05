@@ -17,8 +17,10 @@
 // open_doors, run...) as the map gets features. Settings are saved in D_PRAC/.
 dierise_practice_map()
 {
-    map = practice_map("Huth's D-Practice", "Huth's Die Rise Practice Tool", "D_PRAC/", "d_menu_gamemode");
+    map = practice_map("Huth's D-Prac", "Huth's Die Rise Practice Tool", "D_PRAC/", "d_menu_gamemode");
     map.accent_color = (0.62, 0.18, 0.24); // Dark velvet red (user, 2026-11-04)
+    map.cursor_color = (1, 0.47, 0.52);
+    map.menu_icon = "faction_highrise";
     // SVU: the B2EE timer's Die Rise fridge.
     victis_practice_map(map, "svu_zm", ::dierise_madeup_install);
     return map;
