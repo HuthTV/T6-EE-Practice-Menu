@@ -5,19 +5,19 @@
 #include scripts\zm\utility_core\basegame;
 #include scripts\zm\utility_core\menu_utility;
 #include scripts\zm\buried_menu\buried;
+#include scripts\zm\buried_menu\buriedfullgame;
 #include scripts\zm\buried_menu\freeroam;
 #inline scripts\zm\buried_menu\buried;
 
 /*##############################################################################
                               Practice modes
 ##############################################################################*/
-// Skeleton (2026-10-26): structure only. build.py checks this map but does not
-// install it until its Install flag is set.
 // The first mode is the default.
 register_modes()
 {
 	level.modes = [];
-	register_mode("freeroam", "Freeroam", ::freeroam_initialize, ::freeroam_run);
+	register_mode("buriedfullgame", "Fullgame", ::buriedfullgame_initialize, ::buriedfullgame_run, ::buriedfullgame_build_menu);
+	register_mode("freeroam",       "Freeroam", ::freeroam_initialize,       ::freeroam_run);
 }
 
 main()

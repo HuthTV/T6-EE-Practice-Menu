@@ -8,8 +8,8 @@
 /*##############################################################################
                               Freeroam
 ##############################################################################*/
-// The skeleton's only mode: a normal game with the core menu (HUD, Cheats,
-// General Settings). Mode settings and a "<mode> Settings" menu come later.
+// A normal game with the core menu (HUD, Cheats, General Settings) and no mode
+// settings.
 
 freeroam_initialize()
 {

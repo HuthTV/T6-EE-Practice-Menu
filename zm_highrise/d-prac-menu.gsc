@@ -5,19 +5,19 @@
 #include scripts\zm\utility_core\basegame;
 #include scripts\zm\utility_core\menu_utility;
 #include scripts\zm\dierise_menu\dierise;
+#include scripts\zm\dierise_menu\dierisefullgame;
 #include scripts\zm\dierise_menu\freeroam;
 #inline scripts\zm\dierise_menu\dierise;
 
 /*##############################################################################
                               Practice modes
 ##############################################################################*/
-// Skeleton (2026-10-26): structure only. build.py checks this map but does not
-// install it until its Install flag is set.
 // The first mode is the default.
 register_modes()
 {
 	level.modes = [];
-	register_mode("freeroam", "Freeroam", ::freeroam_initialize, ::freeroam_run);
+	register_mode("dierisefullgame", "Fullgame", ::dierisefullgame_initialize, ::dierisefullgame_run, ::dierisefullgame_build_menu);
+	register_mode("freeroam",        "Freeroam", ::freeroam_initialize,        ::freeroam_run);
 }
 
 main()
