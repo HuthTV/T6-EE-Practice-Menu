@@ -1,5 +1,6 @@
-# Builds both compiled menus on every push and pull request and uploads each as
-# its own artifact: o-prac-menu (Origins) and m-prac-menu (Mob of the Dead), each
+# Builds every map's compiled menu on every push and pull request and uploads each
+# as its own artifact: o-prac-menu (Origins), m-prac-menu (Mob of the Dead),
+# t-prac-menu (TranZit), d-prac-menu (Die Rise) and b-prac-menu (Buried), each
 # holding only the compiled script.
 name: Build
 
@@ -45,4 +46,22 @@ jobs:
         with:
           name: m-prac-menu
           path: build/mob/compiled/t6/m-prac-menu.gsc
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: t-prac-menu
+          path: build/tranzit/compiled/t6/t-prac-menu.gsc
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: d-prac-menu
+          path: build/dierise/compiled/t6/d-prac-menu.gsc
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b-prac-menu
+          path: build/buried/compiled/t6/b-prac-menu.gsc
           if-no-files-found: error
