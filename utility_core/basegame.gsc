@@ -20,6 +20,7 @@
 //   build_hud_top(menu)        HUD rows right after the Speedometer
 //   build_hud(menu)            HUD rows after the core rows
 //   build_cheats(menu)         Cheats rows after the core rows
+//   build_map_menu(root)       the map's own root menus, in every mode (Victis)
 //   base_cfg_defaults(cfg)     returns cfg plus the map's basegame.cfg settings
 //   say_command(message)       chat words the core does not know (self = player)
 //   open_doors()               replaces the core Open Doors
@@ -46,6 +47,8 @@ practice_main(map, version)
 {
     level.practice_map = map;
     level.practice_version = version;
+    // The B2EE timer's init skips itself when this is set (every map and mode).
+    level.oprac_version = version;
 
     setdvar("scr_allowFileIo", 1);
     set_dvar_if_unset(map.mode_dvar, level.modes[0].name);

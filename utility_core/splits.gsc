@@ -156,7 +156,7 @@ practice_start_time_menu(menu)
 
     custom = add_submenu(menu, "custom_start", "Custom " + level.start_time.label);
         add_cfg_toggle(custom, "Enabled", "custom_start");
-        create_option(custom, "Minutes: ^3" + get_cfg_int("custom_start_minutes"), ::cfg_increment_int, "custom_start_minutes", array(0, 59));
+        create_option(custom, "Minutes: ^3" + get_cfg_int("custom_start_minutes"), ::cfg_increment_held, "custom_start_minutes", array(0, 59));
         create_option(custom, "Seconds: ^3" + get_cfg_int("custom_start_seconds"), ::cfg_increment_int, "custom_start_seconds", array(0, 59));
 }
 

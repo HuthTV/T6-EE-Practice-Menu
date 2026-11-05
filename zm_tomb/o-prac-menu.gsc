@@ -12,16 +12,20 @@
 #include scripts\zm\utility_core\basegame;
 #include scripts\zm\utility_core\menu_utility;
 #include scripts\zm\origins_menu\endingprac;
-#include scripts\zm\origins_menu\firestart;
 #include scripts\zm\origins_menu\fullgame;
 #include scripts\zm\origins_menu\genprac;
 #include scripts\zm\origins_menu\hundredkills;
-#include scripts\zm\origins_menu\icestart;
-#include scripts\zm\origins_menu\lightningstart;
 #include scripts\zm\origins_menu\origins;
 #include scripts\zm\origins_menu\panzerstart;
+#include scripts\zm\origins_menu\postfire;
+#include scripts\zm\origins_menu\postice;
+#include scripts\zm\origins_menu\postlightning;
+#include scripts\zm\origins_menu\postwind;
+#include scripts\zm\origins_menu\prefire;
+#include scripts\zm\origins_menu\preice;
+#include scripts\zm\origins_menu\prelightning;
+#include scripts\zm\origins_menu\prewind;
 #include scripts\zm\origins_menu\segmentutil;
-#include scripts\zm\origins_menu\windstart;
 #inline scripts\zm\origins_menu\oprac;
 
 /*##############################################################################
@@ -32,10 +36,14 @@ register_modes()
 {
 	level.modes = [];
 	mode_timer(register_mode("fullgame",       "Fullgame",        ::fullgame_initialize,       ::fullgame_run,       ::fullgame_build_menu), true, SPLIT_NML);
-	mode_timer(register_mode("icestart",       "Icestart",        ::icestart_initialize,       ::shared_run_segment, ::icestart_build_menu), true, SPLIT_ICE);
-	mode_timer(register_mode("windstart",      "Windstart",       ::windstart_initialize,      ::shared_run_segment, ::windstart_build_menu), true, SPLIT_WIND);
-	mode_timer(register_mode("firestart",      "Firestart",       ::firestart_initialize,      ::shared_run_segment, ::firestart_build_menu), true, SPLIT_FIRE);
-	mode_timer(register_mode("lightningstart", "Lightningstart",  ::lightningstart_initialize, ::shared_run_segment, ::lightningstart_build_menu), true, SPLIT_LIGHTNING);
+	mode_timer(register_mode("preice",         "Pre-Ice",         ::preice_initialize,         ::shared_run_segment, ::preice_build_menu), true, SPLIT_ICE);
+	mode_timer(register_mode("postice",        "Post-Ice",        ::postice_initialize,        ::shared_run_segment, ::postice_build_menu), true, SPLIT_WIND);
+	mode_timer(register_mode("prewind",        "Pre-Wind",        ::prewind_initialize,        ::shared_run_segment, ::prewind_build_menu), true, SPLIT_WIND);
+	mode_timer(register_mode("postwind",       "Post-Wind",       ::postwind_initialize,       ::shared_run_segment, ::postwind_build_menu), true, SPLIT_FIRE);
+	mode_timer(register_mode("prefire",        "Pre-Fire",        ::prefire_initialize,        ::shared_run_segment, ::prefire_build_menu), true, SPLIT_FIRE);
+	mode_timer(register_mode("postfire",       "Post-Fire",       ::postfire_initialize,       ::shared_run_segment, ::postfire_build_menu), true, SPLIT_LIGHTNING);
+	mode_timer(register_mode("prelightning",   "Pre-Lightning",   ::prelightning_initialize,   ::shared_run_segment, ::prelightning_build_menu), true, SPLIT_LIGHTNING);
+	mode_timer(register_mode("postlightning",  "Post-Lightning",  ::postlightning_initialize,  ::shared_run_segment, ::postlightning_build_menu), true, SPLIT_FREEDOM);
 	mode_timer(register_mode("endingprac",     "Ending prac",     ::endingprac_initialize,     ::shared_run_segment, ::endingprac_build_menu), true, SPLIT_FREEDOM);
 	mode_timer(register_mode("hundredkills",   "Raise Hell",      ::hundredkills_initialize,   ::shared_run_segment, ::hundredkills_build_menu), true, SPLIT_FREEDOM);
 	mode_timer(register_mode("panzerstart",    "Panzerstart",     ::panzerstart_initialize,    ::shared_run_segment, ::panzerstart_build_menu), true, SPLIT_ICE);

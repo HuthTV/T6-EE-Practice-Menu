@@ -291,19 +291,19 @@ shared_reset_locations(keys)
 	self refresh_menu();
 }
 
-// Returns the menu so a mode can add its own rows below the shared ones. The AFD
+// Returns the menu so a mode can add its own rows below the shared ones. The AFD (Ascend from Darkness)
 // delay is in every mode with the Panzer menu (user, 2026-11-02).
 shared_build_panzer_menu(parent)
 {
 	panzer = add_submenu(parent, "panzer", "Panzer");
 		create_option(panzer, "Panzer 2: ^3" + cfgint_compare("panzer_2", get_cfg_int("panzer_2") + " rounder", "random"), ::shared_cycle_panzer, 2);
 		create_option(panzer, "Panzer 3: ^3" + cfgint_compare("panzer_3", get_cfg_int("panzer_3") + " rounder", "random"), ::shared_cycle_panzer, 3);
-		create_option(panzer, "Panzer AFD delay: ^3" + shared_mechz_delay_text(), ::shared_mechz_delay_step);
+		create_option(panzer, "Ascend from Darkness delay: ^3" + shared_mechz_delay_text(), ::shared_mechz_delay_step);
 	return panzer;
 }
 
 /*##############################################################################
-                              Panzer AFD delay
+                              Panzer AFD (Ascend from Darkness) delay
 ##############################################################################*/
 // The EE mech fight (step 4) spawns 8 Panzers, at most 4 alive, waiting 0.5 to
 // 1 s between spawns. mechz_delay "0" keeps it random, "0.5" or "1" fixes it.

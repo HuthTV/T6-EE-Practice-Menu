@@ -28,6 +28,11 @@
 #define MENU_ROW_SPACING    23
 #define MENU_ARROW_OVERLAP  1.5     // How far each slash of a scroll arrow reaches past the centre.
 
+// Holding Enter on a long row
+#define MENU_HOLD_VALUES    10      // A row with this many values or more repeats.
+#define MENU_HOLD_DELAY     400     // Milliseconds held before the first repeat.
+#define MENU_HOLD_STEP      100     // Milliseconds between repeats.
+
 #define MENU_TEXT_COLOR        (1, 1, 1)
 #define MENU_BACKGROUND_COLOR  (0, 0, 0)
 
@@ -45,21 +50,25 @@ build_menu_tree()
 	self build_modes_menu(root);
 	if(isDefined(level.mode.build_menu))
 		self [[ level.mode.build_menu ]](root);
+	if(isDefined(level.practice_map.build_map_menu))
+		self [[ level.practice_map.build_map_menu ]](root);
 	self add_saveslots_menu();
 	self add_restore_defaults_option();
 	self build_timer_menu(root);
 	self build_hud_menu(root);
 	self build_cheats_menu(root);
+	self build_change_map_menu(root);
 	self build_general_menu(root);
 	self sort_root_menu();
 }
 
 // The root rows in the order of common use. Menus are listed by id; a mode's own
 // menus that are not listed (Items, Relays, Active Gens) come right after the
-// mode's Settings. Each mode builds only the menus it has.
+// mode's Settings, then the map's own menu (Victis Settings). Each mode builds
+// only the menus it has.
 root_menu_order()
 {
-	return array("gamemodes", "mapsettings", "HUD", "randomness", "cycles", "feet", "templars", "timer", "cheats", "vinyls", "parts", "general");
+	return array("gamemodes", "mapsettings", "victis", "HUD", "randomness", "cycles", "feet", "templars", "timer", "cheats", "vinyls", "parts", "changemap", "general");
 }
 
 // Stable sort of the root menu's rows by root_menu_order. Rows that are not a
@@ -182,6 +191,37 @@ timer_last_split_fixed()
 	self iprintln("The last split always shows");
 }
 
+// Loads another map's classic game with Plutonium's zmmap (user, 2026-11-04: a
+// plain map command with the gametype dvars gives the Victis maps no session
+// with permaperks). Each map's practice script loads with its map, so the new
+// map opens with its own menu when that map's script is installed.
+build_change_map_menu(root)
+{
+	menu = add_submenu(root, "changemap", "Change Map");
+		add_change_map_option(menu, "Origins", "zm_tomb", "tomb");
+		add_change_map_option(menu, "Mob of the Dead", "zm_prison", "prison");
+		add_change_map_option(menu, "TranZit", "zm_transit", "transit");
+		add_change_map_option(menu, "Die Rise", "zm_highrise", "rooftop");
+		add_change_map_option(menu, "Buried", "zm_buried", "processing");
+}
+
+add_change_map_option(menu, label, map, location)
+{
+	if(getdvar("mapname") == map) label += " ^9[^3live^9]";
+	create_option(menu, label, ::change_map, map, location);
+}
+
+change_map(map, location)
+{
+	if(!self ishost())
+	{
+		self iprintln("Only the host can change the map");
+		return;
+	}
+	self iprintln("Loading " + map + "...");
+	cmdexec("zmmap " + map + " " + location + " zclassic");
+}
+
 // Options every mode has. Anything mode specific goes in the modes own menu.
 build_general_menu(root)
 {
@@ -300,17 +340,26 @@ add_cfg_choice(menu, label, key, names)
 cfg_set_int(setting, value)
 {
     if(isDefined(level.mode_cfg) && isDefined(level.mode_cfg[setting]))
-    {
         level.mode_cfg[setting] = value;
-        write_config(level.mode_cfg, level.mode_cfg_str);
-    }
     else if(isDefined(level.base_cfg))
-    {
         level.base_cfg[setting] = value;
-        write_config(level.base_cfg, level.base_cfg_str);
-    }
+
+    // A held row saves once, on release (menu_hold_steps).
+    if(is_true(self.menu.holding_step))
+        self.menu.hold_unsaved = setting;
+    else
+        self cfg_save(setting);
 
     self refresh_menu();
+}
+
+// Writes the cfg that owns the setting.
+cfg_save(setting)
+{
+    if(isDefined(level.mode_cfg) && isDefined(level.mode_cfg[setting]))
+        write_config(level.mode_cfg, level.mode_cfg_str);
+    else if(isDefined(level.base_cfg))
+        write_config(level.base_cfg, level.base_cfg_str);
 }
 
 cfg_toggle_binary(setting)
@@ -318,13 +367,23 @@ cfg_toggle_binary(setting)
     self cfg_set_int(setting, 1 - get_cfg_int(setting));
 }
 
-// Steps to the next value in range, wrapping from range[1] back to range[0].
+// Steps to the next value in range, wrapping from range[1] back to range[0]. A range
+// of MENU_HOLD_VALUES or more also repeats while Enter is held.
 cfg_increment_int(setting, range)
 {
+    if(range[1] - range[0] + 1 >= MENU_HOLD_VALUES) self.menu.step_repeats = true;
+
     value = get_cfg_int(setting) + 1;
     if(value > range[1]) value = range[0];
     if(value < range[0]) value = range[1];
     self cfg_set_int(setting, value);
+}
+
+// cfg_increment_int for a row that repeats while held whatever its range.
+cfg_increment_held(setting, range)
+{
+    self.menu.step_repeats = true;
+    self cfg_increment_int(setting, range);
 }
 
 /*##############################################################################
@@ -377,15 +436,46 @@ initialize_menu()
 			{
 				menu = self.menu.current;
 				index = self.menu.cursor[menu];
-				self thread [[ self.menu.option_func[menu][index] ]](self.menu.option_arg1[menu][index], self.menu.option_arg2[menu][index]);
+				func = self.menu.option_func[menu][index];
+				arg1 = self.menu.option_arg1[menu][index];
+				arg2 = self.menu.option_arg2[menu][index];
+
+				// A thread runs at once up to its first wait, so a row that repeats
+				// has raised step_repeats by the next line.
+				self.menu.step_repeats = undefined;
+				self thread [[ func ]](arg1, arg2);
+				if(is_true(self.menu.step_repeats)) self menu_hold_steps(func, arg1, arg2);
 			}
 
-			// Each press acts once, however long the button is held.
+			// Each press acts once, however long the button is held, unless
+			// menu_hold_steps repeated it above.
 			while(self menu_button_pressed())
 				wait .05;
 		}
 		wait .05;
 	}
+}
+
+// Repeats a long row while Enter stays held. The rebuild runs every step, but the cfg
+// is written once, on release, so a hold does not rewrite the file ten times a second.
+menu_hold_steps(func, arg1, arg2)
+{
+	self.menu.holding_step = true;
+	self.menu.hold_unsaved = undefined;
+	next_step = getTime() + MENU_HOLD_DELAY;
+
+	while(self menu_open() && self actionslotthreebuttonpressed())
+	{
+		if(getTime() >= next_step)
+		{
+			self [[ func ]](arg1, arg2);
+			next_step = getTime() + MENU_HOLD_STEP;
+		}
+		wait .05;
+	}
+
+	self.menu.holding_step = undefined;
+	if(isDefined(self.menu.hold_unsaved)) self cfg_save(self.menu.hold_unsaved);
 }
 
 // Offhand throws (special and lethal) are blocked while the menu is open, and with

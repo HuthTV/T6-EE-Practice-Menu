@@ -82,9 +82,9 @@ class MapInfo:
 MAPS = [
     MapInfo("origins", "o", "zm_tomb",     "o-prac-menu.gsc", "origins_menu", True),
     MapInfo("mob",     "m", "zm_prison",   "m-prac-menu.gsc", "mob_menu",     True),
-    MapInfo("buried",  "b", "zm_buried",   "b-prac-menu.gsc", "buried_menu",  False),
-    MapInfo("dierise", "d", "zm_highrise", "d-prac-menu.gsc", "dierise_menu", False),
-    MapInfo("tranzit", "t", "zm_transit",  "t-prac-menu.gsc", "tranzit_menu", False),
+    MapInfo("buried",  "b", "zm_buried",   "b-prac-menu.gsc", "buried_menu",  True),
+    MapInfo("dierise", "d", "zm_highrise", "d-prac-menu.gsc", "dierise_menu", True),
+    MapInfo("tranzit", "t", "zm_transit",  "t-prac-menu.gsc", "tranzit_menu", True),
 ]
 MAP_FOLDERS = [m.folder for m in MAPS]
 
@@ -289,7 +289,7 @@ def join_sources(files, out_file, info):
 
 
 def find_source(line_map, flat_line, flat_name):
-    """'origins_menu\\windstart.gsc:120' for a line of the joined file."""
+    """'origins_menu\\prewind.gsc:120' for a line of the joined file."""
     for name, start, count in line_map:
         if start <= flat_line < start + count:
             return f"{name}:{flat_line - start + 1}"

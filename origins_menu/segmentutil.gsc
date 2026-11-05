@@ -43,7 +43,7 @@ shared_segment_replacefuncs()
 
     // Out-of-playable-area and despawn checks on a real run's timing from the
     // start's clock (start_robots, set by shared_start_clock). Held
-    // starts hold them until release (shared_held_start_install); Icestart, from
+    // starts hold them until release (shared_held_start_install). Pre-Ice, from
     // the black screen. The out-of-area check is the core monitor (basegame).
     practice_check_phasing(undefined, "start_robots");
     replacefunc( maps\mp\zm_tomb_distance_tracking::zombie_tracking_init, ::shared_segment_zombie_tracking_init );
@@ -523,7 +523,7 @@ shared_chamber_discs_randomize() // OVERRIDE: maps\mp\zm_tomb_quest_crypt::chamb
 // Which crypt gem the opening shortcut lines the dials up with at this scramble,
 // or undefined to scramble normally. A mode sets segment.disc_shortcut_gem for
 // its first scramble (segment.first_scramble):
-//   Ice:  the mound opening (scramble 1) -> blue (Icestart and Ice code start).
+//   Ice:  the mound opening (scramble 1) -> blue (Pre-Ice and Post-Ice).
 //   Wind: the setup Ice orb (scramble 2) -> yellow, only for the Craft start.
 //   Fire: the setup Wind orb (scramble 3) -> red, only for the Craft start.
 //   Lightning: the setup Fire orb (scramble 4) -> purple, only for the Craft start.
@@ -929,8 +929,8 @@ shared_get_parts()
     plinth = getent("crystal_plinth4", "targetname");
     while(!isDefined(plinth.v_staff)) wait 0.05;
 
-    // The Icestart route has settings for the plane and R2L parts.
-    icestart = level.segment.icestart_route;
+    // The Ice route has settings for the plane and R2L parts.
+    ice_route = level.segment.ice_route;
 
 	self maps\mp\zombies\_zm_craftables::player_get_craftable_piece("elemental_staff_air", "upper_staff");
 	self maps\mp\zombies\_zm_craftables::player_get_craftable_piece("elemental_staff_air", "middle_staff");
@@ -943,12 +943,12 @@ shared_get_parts()
 
     // Panzer and Gen 6 parts; the middle one comes from the plane.
     self maps\mp\zombies\_zm_craftables::player_get_craftable_piece("elemental_staff_fire", "upper_staff");
-	if(!icestart || get_cfg_int("plane_part"))
+	if(!ice_route || get_cfg_int("plane_part"))
     self maps\mp\zombies\_zm_craftables::player_get_craftable_piece("elemental_staff_fire", "middle_staff");
 	self maps\mp\zombies\_zm_craftables::player_get_craftable_piece("elemental_staff_fire", "lower_staff");
 
     // R2L part. The mound and church parts are never collected by a segment start.
-    if(!icestart || get_cfg_int("r2l"))
+    if(!ice_route || get_cfg_int("r2l"))
         self maps\mp\zombies\_zm_craftables::player_get_craftable_piece("elemental_staff_lightning", "upper_staff");
 
     self maps\mp\zombies\_zm_craftables::player_get_craftable_piece("equip_dieseldrone_zm", "brain");
@@ -1095,7 +1095,7 @@ shared_mechz_round_tracker_loop_start()
 /*##############################################################################
                               Panzer waiting at a spot (segment starts)
 ##############################################################################*/
-// In a run, a Panzer due on the start round (Windstart: Panzer 2 a 4 rounder,
+// In a run, a Panzer due on the start round (Pre-Wind: Panzer 2 a 4 rounder,
 // round 12) came while the player was still above ground and waits outside when
 // they come out of the Crazy Place: vanilla Panzers do not target a player in the
 // Crazy Place (get_favorite_enemy skips is_player_in_chamber). The native tracker
@@ -1925,13 +1925,11 @@ shared_item_collected(key)
 // What each segment start can still be missing at its craft (the user's route
 // facts). Location defaults (shared_segment_item_defaults) collect every disc and
 // Maxis part; the player sets one to a spot to leave it out.
-//   Icestart        Purple Disc, plane, R2L part, Maxis Body, Maxis Engine
-//   Ice code start  as Icestart
-//   Windstart       Maxis Body, Maxis Engine, Maxis Drone crafted
-//   Firestart       Maxis Body, Maxis Engine, Maxis Drone crafted
-//   Lightningstart  Maxis Engine, Maxis Drone crafted
-//   Ending prac     Maxis Drone crafted
-//   100 Kills       Maxis Drone crafted (no setting: always crafted)
+//   Pre-Ice, Post-Ice              Purple Disc, plane, R2L part, Maxis Body, Maxis Engine
+//   Pre-Wind, Pre-Fire, Post-Fire  Maxis Body, Maxis Engine, Maxis Drone crafted
+//   Pre-Lightning, Post-Lightning  Maxis Engine, Maxis Drone crafted
+//   Ending prac                    Maxis Drone crafted
+//   Raise Hell                     Maxis Drone crafted (no setting: always crafted)
 // Shield parts are optional in every start. A crafted drone has all its parts.
 
 // The mode has a Maxis Drone setting (segment.drone_option).
@@ -2024,13 +2022,13 @@ shared_part_defaults(settings_ar)
 }
 
 // Segment starts, after shared_part_defaults: the route has every disc and Maxis
-// part collected; shield parts stay on the map. Icestart adds its own items
+// part collected; shield parts stay on the map. The Ice modes add their own items
 // (plane, R2L).
 shared_segment_item_defaults(settings_ar)
 {
 	foreach(key in combinearrays(shared_vinyl_keys(), array("maxis_body", "maxis_engine")))
 		settings_ar[key] = shared_part_collected_value(key);
-	settings_ar["maxis_drone_crafted"] = 1;      // Windstart on: 1 crafts and gives the drone (route default), 0 leaves it uncrafted
+	settings_ar["maxis_drone_crafted"] = 1;      // Pre-Wind on: 1 crafts and gives the drone (route default), 0 leaves it uncrafted
 	return settings_ar;
 }
 
@@ -2120,13 +2118,13 @@ shared_add_stg_choice(menu)
 shared_build_items_menu(root)
 {
     items = add_submenu(root, "items", "Items settings", "Items");
-        if(level.segment.icestart_route)
+        if(level.segment.ice_route)
         {
             add_cfg_toggle(items, "Plane Shot", "kill_plane");
             create_option(items, "Plane Part: " + cfgint_compare("plane_part", "^2collected", "^1disperse"), ::shared_plane_part_toggle);
         }
         if(shared_drone_option()) add_cfg_toggle(items, "Maxis Drone", "maxis_drone_crafted", "^2crafted", "^3not crafted");
-        if(level.segment.icestart_route) add_cfg_toggle(items, "Fizz DT", "dt_start");
+        if(level.segment.ice_route) add_cfg_toggle(items, "Fizz DT", "dt_start");
         add_cfg_toggle(items, "115 Reward", "headshot_reward");
 }
 
@@ -2320,7 +2318,7 @@ shared_start_time_menu(menu)
 
     custom = add_submenu(menu, "custom_start", "Custom start time", "Custom Start Time");
         add_cfg_toggle(custom, "Enabled", "custom_" + entry.cfg);
-        create_option(custom, "Minutes: ^3" + get_cfg_int("custom_" + entry.cfg + "_minutes"), ::cfg_increment_int, "custom_" + entry.cfg + "_minutes", array(entry.custom_min_minutes, entry.custom_max_minutes));
+        create_option(custom, "Minutes: ^3" + get_cfg_int("custom_" + entry.cfg + "_minutes"), ::cfg_increment_held, "custom_" + entry.cfg + "_minutes", array(entry.custom_min_minutes, entry.custom_max_minutes));
         create_option(custom, "Seconds: ^3" + get_cfg_int("custom_" + entry.cfg + "_seconds"), ::cfg_increment_int, "custom_" + entry.cfg + "_seconds", array(0, 59));
 
     entries = shared_start_time_entries();
@@ -2555,7 +2553,7 @@ shared_boomhilda_ammo_text()
     return "" + setting * BOOMHILDA_AMMO_STEP;
 }
 
-// Held starts from Ice code start on (the Mauser is upgraded at setup).
+// Held starts from Post-Ice on (the Mauser is upgraded at setup).
 shared_boomhilda_menu(settings)
 {
     create_option(settings, "Boomhilda ammo: ^3" + shared_boomhilda_ammo_text(), ::cfg_increment_int, "boomhilda_ammo", array(0, BOOMHILDA_AMMO_RANDOM));
@@ -2590,6 +2588,59 @@ shared_teleport_pad(element)
     return undefined;
 }
 
+// In the element's tunnel in front of its portal, facing it: where leaving the
+// Crazy Place by that element's exit puts the player. Vanilla run_chamber_exit
+// sends them to the exit trigger's target. Call once the portal is open (the pad
+// is moved to the portal's middle then). Undefined when a struct is missing.
+// Not checked in game: the console shows where it is.
+shared_tunnel_portal_spots(element)
+{
+    pad = shared_teleport_pad(element);
+    landing = undefined;
+    exit_trigger = level.a_teleport_exit_triggers[element];
+    if(isdefined(exit_trigger) && isdefined(exit_trigger.target))
+        landing = getstructarray(exit_trigger.target, "targetname")[0];
+    if(!isdefined(pad) || !isdefined(landing))
+    {
+        shared_setup_trace("portal spot " + element + " not found");
+        return undefined;
+    }
+    yaw = vectortoangles(pad.origin - landing.origin)[1];
+    shared_setup_trace("portal spot " + element + " " + landing.origin + " yaw " + yaw);
+    return shared_start_spots(landing.origin, (0, yaw, 0), landing.origin, (0, yaw, 0));
+}
+
+// The open portal takes anyone within 120 units of it (vanilla teleporter_radius_think).
+#define CHAMBER_EXIT_DISTANCE  180
+
+// In the Crazy Place, CHAMBER_EXIT_DISTANCE in front of the element's exit portal,
+// on the ground, facing it (moved here from the Ice code exit, 2026-11-04).
+// Call once the exit is enabled (its struct has its position then).
+shared_chamber_exit_spots(element)
+{
+    portal = level.a_teleport_exits[element].origin;
+    // The use trigger stands in front of the portal: go further out that way.
+    trigger = level.a_teleport_exit_triggers[element].origin;
+    direction = vectornormalize((trigger[0] - portal[0], trigger[1] - portal[1], 0));
+    spot = portal + direction * CHAMBER_EXIT_DISTANCE;
+    origin = groundpos((spot[0], spot[1], trigger[2] + 30));
+    angles = (0, vectortoangles(portal - spot)[1], 0);
+    shared_setup_trace("exit spot " + element + " " + origin + " angles " + angles);
+    return shared_start_spots(origin, angles, origin, angles);
+}
+
+// In the middle of the Crazy Place (vanilla chamber_center), facing the element's
+// exit portal.
+shared_chamber_center_spots(element)
+{
+    center = getstruct("chamber_center", "targetname");
+    origin = groundpos(center.origin + (0, 0, 30));
+    portal = level.a_teleport_exits[element].origin;
+    angles = (0, vectortoangles(portal - origin)[1], 0);
+    shared_setup_trace("chamber center " + origin + " angles " + angles);
+    return shared_start_spots(origin, angles, origin, angles);
+}
+
 /*##############################################################################
                               Mode pieces shared by segment starts
 ##############################################################################*/
@@ -2616,14 +2667,14 @@ shared_disc_defaults(settings_ar, first_scramble)
     return settings_ar;
 }
 
-// The Icestart route's round 10 (Icestart and Ice code start). R2L: the Gen 3
+// The Ice route's round 10 (Pre-Ice and Post-Ice). R2L: the Gen 3
 // spawn door is open, the Gen 2 spawn door closed, and Cycle 1 Foot
 // (trench_path: 1 Gen 2, 2 Gen 3, 0 random) picks which second door is open.
 // Otherwise both Gen 3 doors are closed. The R2L route shows the AK chalk
 // (unless the B23R rolls) and needs one tank setup trip less.
-shared_icestart_route(segment)
+shared_ice_route(segment)
 {
-    segment.icestart_route = true;
+    segment.ice_route = true;
     if(get_cfg_int("r2l"))
     {
         trench_path = get_cfg_int("trench_path");
@@ -2646,7 +2697,7 @@ shared_icestart_route(segment)
     segment.disc_shortcut_gem = "crypt_gem_ice";
 }
 
-// tablet: picked up at the bunker and carried, still dirty (the Icestart route).
+// tablet: picked up at the bunker and carried, still dirty (the Ice route).
 shared_tablet_carried()
 {
     while(!isDefined(level.n_tablets_remaining) || !isDefined(self.sq_one_inch_punch_stage)) wait 0.05;
@@ -2777,7 +2828,7 @@ shared_teleport_to_start(spots, use_exit)
 // differs as data (gems, perks, doors...) plus the mode's own steps: setup (the
 // map setup), start (setup, start spot, release and run clock) and on_spawn
 // (what happens as the player spawns). Starts that hold the player while setup
-// runs use shared_held_start. Icestart has its own start because of Peek Code.
+// runs use shared_held_start. Pre-Ice has its own start because of Peek Code.
 
 // Game seconds (timescale 10: a tenth of that in real time) before a held start
 // whose setup has not finished releases the player anyway.
@@ -2818,8 +2869,28 @@ shared_segment()
     segment.last_disc_aligned = false;      // true: the shortcut lines up the last dial too (no Last Disc Turn row)
     segment.discs_untouched = false;        // true: the dials keep their scrambles, no shortcut, no Skip First Disc (shared_segment_stg)
     segment.drone_option = false;           // the mode has a Maxis Drone setting (shared_drone_option)
-    segment.icestart_route = false;         // shared_icestart_route: Plane Part and R2L settings apply
+    segment.ice_route = false;              // shared_ice_route: Plane Part and R2L settings apply
+    segment.punch_element = undefined;      // set: the upgraded Iron Fist of that element, given without its flourish
     return segment;
+}
+
+// Vanilla one_inch_punch_melee_attack for an upgraded punch, without the flourish
+// (no weapon switch, no animation, user 2026-11-04): the elemental punch replaces
+// the melee weapon at once. Waits like shared_starting_weapons, so vanilla's spawn
+// loadout cannot give the knife back.
+shared_give_upgraded_punch(element)
+{
+    self endon("disconnect");
+    while(self.sessionstate != "playing" || (!self hasweapon("c96_zm") && !self hasweapon("c96_upgraded_zm"))) wait 0.05;
+    if(!is_true(self.one_inch_punch_flag_has_been_init)) self ent_flag_init("melee_punch_cooldown");
+    self.one_inch_punch_flag_has_been_init = 1;
+    self.b_punch_upgraded = 1;
+    self.str_punch_element = element;
+    weapon = "one_inch_punch_" + element + "_zm";
+    self takeweapon(self get_player_melee_weapon());
+    self giveweapon(weapon);
+    self set_player_melee_weapon(weapon);
+    self thread maps\mp\zombies\_zm_weap_one_inch_punch::monitor_melee_swipe();
 }
 
 // Load-time hooks, flags and state every segment start needs.
@@ -2873,7 +2944,10 @@ shared_run_segment()
         attaining27 thread shared_box_rewards("zc_boxes_filled", true);
         attaining27 thread shared_box_rewards("zc_points_spent", segment.points_spent_claimed);
         attaining27 thread shared_box_rewards("zc_zone_captures");
-        attaining27 thread maps\mp\zombies\_zm_weap_one_inch_punch::one_inch_punch_melee_attack();
+        if(isdefined(segment.punch_element))
+            attaining27 thread shared_give_upgraded_punch(segment.punch_element);
+        else
+            attaining27 thread maps\mp\zombies\_zm_weap_one_inch_punch::one_inch_punch_melee_attack();
     }
 
     //Perks and guns
@@ -2895,7 +2969,7 @@ shared_run_segment()
 /*##############################################################################
                               Held start
 ##############################################################################*/
-// Every segment start but Icestart: the player waits frozen on the start spot
+// Every segment start but Pre-Ice: the player waits frozen on the start spot
 // while setup runs at timescale 10 and is released on the segment round.
 // The mode's description sets spots (shared_start_spots), use_exit, round and
 // round_zombies (shared_set_round).

@@ -12,10 +12,10 @@
 // Settings that force the random parts of the staff puzzles. Each puzzle's RNG is
 // offered by the modes that still have it ahead, from the first puzzle the mode
 // passes to puzzle_rng_install (PUZZLE_RNG_* in oprac.gsh):
-//   Ice code       Fullgame, Icestart, Ice code start, Panzerstart
-//   Wind rings     the same, Windstart
-//   Fire torches   the same, Firestart
-//   Crazy Place walls   the same, Lightningstart
+//   Ice code       Fullgame, Pre-Ice, Post-Ice, Panzerstart
+//   Wind rings     the same, Pre-Wind, Post-Wind
+//   Fire torches   the same, Pre-Fire, Post-Fire
+//   Crazy Place walls   the same, Pre-Lightning, Post-Lightning
 // A mode calls puzzle_rng_install and puzzle_rng_defaults while it loads, and its
 // menu calls puzzle_rng_build_menus (Fullgame, inside its Randomness menu) or
 // puzzle_rng_build_root_menu (the segment starts, a Randomness menu of their own).

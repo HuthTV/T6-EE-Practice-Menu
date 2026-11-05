@@ -8,7 +8,7 @@
                               Save slots
 ##############################################################################*/
 // Every mode with a "<mode> Settings" menu has SAVESLOT_COUNT saved copies of its
-// settings, one cfg file each next to the mode's own (O_PRAC/windstart_slot1.cfg).
+// settings, one cfg file each next to the mode's own (O_PRAC/prewind_slot1.cfg).
 // A slot file holds the mode cfg's keys plus slot_name, the name given in chat.
 // A slot that holds no setting is empty, even when it has a name.
 //
@@ -50,7 +50,7 @@ saveslots_available()
 	return isDefined(level.mode_cfg_str) && isDefined(self.menu) && isDefined(self.menu.option_text["mapsettings"]);
 }
 
-// "O_PRAC/windstart.cfg" gives "O_PRAC/windstart_slot1.cfg".
+// "O_PRAC/prewind.cfg" gives "O_PRAC/prewind_slot1.cfg".
 saveslot_file(slot)
 {
 	base = level.mode_cfg_str;

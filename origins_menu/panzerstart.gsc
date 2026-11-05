@@ -404,7 +404,7 @@ panzerstart_default_cfg()
     settings_ar["souls_gen5"] = PANZERSTART_BOX_SOULS;
     settings_ar["souls_mound"] = PANZERSTART_BOX_SOULS;
     settings_ar["souls_church"] = 0;
-    settings_ar["early_gram"] = 1;  // 1: gramophone in hand, 0: left at the mound (as Icestart).
+    settings_ar["early_gram"] = 1;  // 1: gramophone in hand, 0: left at the mound (as Pre-Ice).
     settings_ar["clay"] = 1;
     settings_ar["hud"] = 0;         // Slowed and Panzer health rows.
     settings_ar["stg_start"] = STG_NO;

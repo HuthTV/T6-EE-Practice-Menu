@@ -93,6 +93,18 @@ shared_complete_staff(staff_id, num_souls)
     shared_setup_trace(staff.name + ": done");
 }
 
+// Collects the staff's pieces, crafts it and puts it in the player's hands: a
+// start just after the craft. Its puzzles stay native unless the setup solves them.
+shared_craft_and_take_staff(staff_id)
+{
+    staff = shared_staff_names(staff_id);
+    self shared_get_staff_pieces(staff_id);
+    shared_setup_trace(staff.name + ": craft");
+    self shared_craft_staff(staff.craftable);
+    shared_setup_trace(staff.name + ": take");
+    self shared_take_staff(staff.craftable, staff.weapname);
+}
+
 // Native names: craftable, weapon, crypt gem and orb plinth prefix.
 shared_staff_names(staff_id)
 {
@@ -141,7 +153,7 @@ shared_fill_souls(staff_id, num_souls)
 // its last step (shared_portals_wait). The exit then stays open until the player
 // is released (shared_run_chamber_exit). take_gram: the gramophone comes back in
 // hand once the portal is open (the Craft starts). exit_element: the exit to
-// open when it is not the gramophone's element (Ice code start).
+// open when it is not the gramophone's element (Post-Fire torches).
 shared_portals_begin(element, open_exit, take_gram, exit_element)
 {
     if(!isdefined(exit_element)) exit_element = element;
@@ -290,17 +302,7 @@ shared_wind_puzzles()
 
 shared_fire_puzzles()
 {
-    // Crazy Place: every sacrifice volume has had its 32 kills. The native puzzle
-    // checks the volumes when a sacrifice completes.
-    while(!isDefined(level.sacrifice_volumes) || level.sacrifice_volumes.size == 0) wait 0.05;
-    foreach(volume in level.sacrifice_volumes)
-    {
-        volume.num_sacrifices_received = 32;
-        volume.pct_sacrifices_received = 1;
-        volume.b_gods_pleased = 1;
-    }
-    level notify("fire_sacrifice_completed");
-    flag_wait("fire_puzzle_1_complete");
+    shared_fire_sacrifices();
 
     // Church: light the four torches the symbols point to. The native puzzle marks
     // them once the sacrifices are done, and the last flame completes it.
@@ -314,6 +316,21 @@ shared_fire_puzzles()
     }
     foreach(torch in torches) torch thread maps\mp\zm_tomb_quest_fire::fire_puzzle_2_torch_flame();
     flag_wait("fire_puzzle_2_complete");
+}
+
+// The Fire staff's Crazy Place puzzle: every sacrifice volume has had its 32
+// kills. The native puzzle checks the volumes when a sacrifice completes.
+shared_fire_sacrifices()
+{
+    while(!isDefined(level.sacrifice_volumes) || level.sacrifice_volumes.size == 0) wait 0.05;
+    foreach(volume in level.sacrifice_volumes)
+    {
+        volume.num_sacrifices_received = 32;
+        volume.pct_sacrifices_received = 1;
+        volume.b_gods_pleased = 1;
+    }
+    level notify("fire_sacrifice_completed");
+    flag_wait("fire_puzzle_1_complete");
 }
 
 shared_lightning_puzzles()

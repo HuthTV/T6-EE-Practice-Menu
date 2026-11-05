@@ -17,7 +17,10 @@
 // drone crafted, the Fire staff in hand. The player starts on round 15 or 16 with
 // the chosen number of zombies left, either at Gen 5 before the fire link (the
 // robots walk a three robot round with the hatch on the Rain fire robot), or in
-// Odin's head with the hole already open (the Rain fire eject). Ported from the
+// Odin's head with the hole already open (the Rain fire eject), or a little
+// earlier in the Crazy Place (user, 2026-11-04): Staff kills, Fire and Lightning
+// upgraded staffs in their chargers with no souls yet, or Crazy Place leave,
+// every staff charged and the Fire staff in hand, at the chosen exit. Ported from the
 // ending practice of various_origins_practice.gsc; the setup uses the same native
 // steps as the other segment starts (shared_complete_staff and friends).
 
@@ -32,6 +35,8 @@
 #define ENDING_SPAWN_GEN5  0
 #define ENDING_SPAWN_HEAD  1
 #define ENDING_SPAWN_EXIT  2
+#define ENDING_SPAWN_STAFF_KILLS  3
+#define ENDING_SPAWN_LEAVE        4
 #define ENDING_SCORE       100000
 // Zombie blood drops until the drone is retrieved: the plane step needs it.
 #define ENDING_DROP_INCREMENT  7414.44
@@ -48,8 +53,15 @@ endingprac_initialize()
     shared_start_time_add("button", "button", "Button press", "28:00", "30:30", 5, "29:00", 26, 34);
     shared_start_time_add("foot1", "foot", "Odin foot 1st", "28:00", "30:30", 5, "29:00", 26, 34);
     shared_start_time_add("foot2", "foot", "Odin foot 2nd", "28:00", "30:30", 5, "29:00", 26, 34);
+    // The Crazy Place locations have their own: Staff kills at release, Crazy
+    // Place leave on leaving through the exit. Guesses as well.
+    shared_start_time_add("staff_kills", "release", "Release", "26:30", "28:30", 5, "27:30", 24, 34);
+    shared_start_time_add("chamber_leave", "exit", "Exit", "27:15", "29:15", 5, "28:15", 24, 34);
     level.start_time_forced = ::endingprac_forced_start_time;
+    level.start_time_choices = ::endingprac_start_time_choices;
     mode_cfg_load("endingprac", endingprac_default_cfg());
+    // No Trio skip setting (user, 2026-11-04): an old cfg's value is ignored.
+    level.mode_cfg["trioskip"] = 0;
     shared_segment_install(endingprac_segment());
     // The old ending practice kept Templars away until round 19.
     shared_schedules_init(ENDING_FIRST_TEMPLAR_ROUND);
@@ -74,7 +86,7 @@ endingprac_segment()
         exit_angles = EXIT_WIND_ANGLES;
     }
     segment.spots = shared_start_spots(CRAFT_LIGHTNING_ORIGIN, CRAFT_LIGHTNING_ANGLES, exit_origin, exit_angles);
-    segment.use_exit = get_cfg_int("ending_spawn") == ENDING_SPAWN_EXIT;
+    segment.use_exit = get_cfg_int("ending_spawn") == ENDING_SPAWN_EXIT || get_cfg_int("ending_spawn") == ENDING_SPAWN_LEAVE;
     // Every relay is solved by this point of the route.
     segment.solved_relays = shared_relay_keys();
     segment.drone_option = true;
@@ -84,33 +96,64 @@ endingprac_segment()
     return segment;
 }
 
+// The Exit setting's element (ending_exit 0 Lightning, 1 Wind).
+endingprac_exit_element()
+{
+    if(get_cfg_int("ending_exit") == 1) return WIND;
+    return LIGHTNING;
+}
+
+// The locations in the Crazy Place.
+endingprac_in_chamber()
+{
+    spawn = get_cfg_int("ending_spawn");
+    return spawn == ENDING_SPAWN_STAFF_KILLS || spawn == ENDING_SPAWN_LEAVE;
+}
+
 endingprac_setup()
 {
     self shared_staff_setup_start();
-    // Exit start: the gramophone is at the exit's portal, which is open. Otherwise
-    // in hand (the mound opening gave it back), or at the Wind portal. Opened
-    // first, they finish opening while the staffs are completed.
-    if(level.segment.use_exit)
-    {
-        element = LIGHTNING;
-        if(get_cfg_int("ending_exit") == 1) element = WIND;
-        self shared_portals_begin(element, true, false);
-    }
+    spawn = get_cfg_int("ending_spawn");
+    // Exit and Crazy Place leave: the gramophone is at the exit's portal, which
+    // is open. Staff kills: at that portal (the way in), the exit closed.
+    // Otherwise in hand (the mound opening gave it back), or at the Wind portal.
+    // Opened first, they finish opening while the staffs are completed.
+    if(level.segment.use_exit || spawn == ENDING_SPAWN_STAFF_KILLS)
+        self shared_portals_begin(endingprac_exit_element(), level.segment.use_exit, false);
     else if(get_cfg_int("ending_gram"))
         self shared_portals_begin(WIND, false, false);
     else
         flag_set("segment_portals_open");
+    // Staff kills: Ice and Wind were charged earlier in the route, Fire and
+    // Lightning sit in their chargers with no souls (as Pre-Lightning's Fire).
+    souls = 20;
+    if(spawn == ENDING_SPAWN_STAFF_KILLS) souls = 0;
     self shared_complete_staff(ICE, 20);
     self shared_complete_staff(WIND, 20);
-    self shared_complete_staff(FIRE, 20);
-    self shared_complete_staff(LIGHTNING, 20);
+    self shared_complete_staff(FIRE, souls);
+    self shared_complete_staff(LIGHTNING, souls);
     self shared_portals_wait();
     self maps\mp\zombies\_zm_weap_beacon::player_give_beacon();
-    self endingprac_take_fire_staff();
+    if(spawn == ENDING_SPAWN_STAFF_KILLS)
+        level.segment.spots = shared_chamber_center_spots(endingprac_exit_element());
+    else
+        self endingprac_take_fire_staff();
+    if(spawn == ENDING_SPAWN_LEAVE)
+        level.segment.spots = shared_chamber_exit_spots(endingprac_exit_element());
 
     // The staffs stay on their Crazy Place plinths; the robot heads count as done.
+    // Staff kills: once the player has charged them all.
+    if(spawn == ENDING_SPAWN_STAFF_KILLS)
+        level thread endingprac_staffs_placed_when_upgraded();
+    else
+        flag_set("ee_all_staffs_placed");
+    if(spawn == ENDING_SPAWN_HEAD) shared_open_ee_hole();
+}
+
+endingprac_staffs_placed_when_upgraded()
+{
+    flag_wait("ee_all_staffs_upgraded");
     flag_set("ee_all_staffs_placed");
-    if(get_cfg_int("ending_spawn") == ENDING_SPAWN_HEAD) shared_open_ee_hole();
 }
 
 // Picks up the upgraded Fire staff through its native pickup trigger. The trigger
@@ -169,7 +212,7 @@ endingprac_place_player()
         case ENDING_SPAWN_HEAD:
             self endingprac_enter_head();
             break;
-        default: // Exit: the Crazy Place exit's spot.
+        default: // Exit: outside the Crazy Place exit. Staff kills, Crazy Place leave: the spots the setup found.
             self shared_teleport_to_start(level.segment.spots, true);
             break;
     }
@@ -219,7 +262,7 @@ endingprac_head_ignoreme()
 // ending practice sent them. Scheduled on the picked start time.
 endingprac_start_robots()
 {
-    shared_robot_schedule(shared_start_time_seconds(), !get_cfg_int("trioskip"));
+    shared_robot_schedule(shared_start_time_seconds(), true);
     level.segment_robot_wait = 0;
     flag_set("start_robots");
 }
@@ -228,8 +271,19 @@ endingprac_start_robots()
 // foot is left): its clock always starts at release.
 endingprac_forced_start_time()
 {
-    if(get_cfg_int("ending_spawn") == ENDING_SPAWN_HEAD) return "release";
+    switch(get_cfg_int("ending_spawn"))
+    {
+        case ENDING_SPAWN_HEAD:        return "release";
+        case ENDING_SPAWN_STAFF_KILLS: return "staff_kills";
+        case ENDING_SPAWN_LEAVE:       return "chamber_leave";
+    }
     return undefined;
+}
+
+// level.start_time_choices: Gen 5 and Exit pick from the four fire link entries.
+endingprac_start_time_choices()
+{
+    return array("release", "button", "foot1", "foot2");
 }
 
 // Vanilla get_next_powerup; until the drone is retrieved every drop is zombie
@@ -258,18 +312,17 @@ endingprac_get_next_powerup() // OVERRIDE: maps\mp\zombies\_zm_powerups::get_nex
 endingprac_build_menu(root)
 {
     settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
-        add_cfg_choice(settings, "Start Location", "ending_spawn", array("Gen 5", "Robot head", "Exit"));
+        add_cfg_choice(settings, "Start Location", "ending_spawn", array("Gen 5", "Robot head", "Exit", "staff kills", "crazy place leave"));
         self shared_start_time_menu(settings);
-        if(get_cfg_int("ending_spawn") == ENDING_SPAWN_EXIT) add_cfg_choice(settings, "Exit", "ending_exit", array("Lightning", "Wind"));
+        if(level.segment.use_exit || get_cfg_int("ending_spawn") == ENDING_SPAWN_STAFF_KILLS) add_cfg_choice(settings, "Exit", "ending_exit", array("Lightning", "Wind"));
         create_option(settings, "Round: ^3" + get_cfg_int("ending_round"), ::cfg_increment_int, "ending_round", array(15, 16));
         shared_add_round_zombies_option(settings, "ending_round", "ending_zombies");
         shared_add_stg_choice(settings);
         self shared_boomhilda_menu(settings);
-        // The Exit start always has it at that exit's portal (Lightning or Wind).
-        if(get_cfg_int("ending_spawn") != ENDING_SPAWN_EXIT) add_cfg_choice(settings, "Gramophone", "ending_gram", array("in hand", "Wind portal"));
+        // Exit and the Crazy Place locations always have it at that exit's portal (Lightning or Wind).
+        if(get_cfg_int("ending_spawn") != ENDING_SPAWN_EXIT && !endingprac_in_chamber()) add_cfg_choice(settings, "Gramophone", "ending_gram", array("in hand", "Wind portal"));
         add_cfg_toggle(settings, "Maxis Drone", "maxis_drone_crafted", "^2crafted", "^3not crafted");
         create_option(settings, "Rain foot: ^3" + rain_foot_text(), ::cfg_increment_int, "rain_foot", array(FOOT_RANDOM, FOOT_RIGHT));
-        add_cfg_toggle(settings, "Trio skip", "trioskip", "^2Yes", "^1No");
 
     self shared_build_panzer_menu(root);
     self shared_build_templar_menu(root);
@@ -287,7 +340,6 @@ endingprac_default_cfg()
     settings_ar["ending_gram"] = 1;     // 0 in hand, 1 placed at the Wind portal.
     settings_ar["stg_start"] = STG_PAPPED; // STG acquired: STG_NO, STG_YES or STG_PAPPED.
     settings_ar = shared_boomhilda_defaults(settings_ar);
-    settings_ar["trioskip"] = 0;
     settings_ar = shared_start_time_defaults(settings_ar);
     settings_ar = shared_part_defaults(settings_ar);
     settings_ar = shared_segment_item_defaults(settings_ar);

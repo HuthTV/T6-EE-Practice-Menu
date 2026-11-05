@@ -105,6 +105,7 @@ genprac_build_menu(root)
 			add_cfg_toggle(gens, "Gen 5", "nml_left");
 			add_cfg_toggle(gens, "Gen 6", "church");
 		add_cfg_choice(gen_prac, "G-Strike Throws", "teleport_throw", array("normal", "teleport to landing", "follow in flight"));
+		if(get_cfg_int("teleport_throw") == THROW_FOLLOW) add_cfg_toggle(gen_prac, "Return After Landing", "throw_return");
 }
 
 genprac_reset_all_gens()
@@ -174,7 +175,8 @@ beacon_tp()
 // model sits on the grenade (no offset to swing around it) and the player is
 // linked with free look. The out-of-playable-area monitor is off for the ride.
 // Once the grenade lands (or is gone) the player waits THROW_FOLLOW_RETURN_DELAY
-// seconds there and goes back to where they threw from.
+// seconds there and goes back to where they threw from (throw_return), or is let
+// go at the landing spot.
 genprac_follow_throw(grenade)
 {
     self endon("disconnect");
@@ -196,12 +198,15 @@ genprac_follow_throw(grenade)
 
     grenade thread genprac_follow_throw_land();
     while(isdefined(grenade) && !is_true(grenade.follow_landed)) wait 0.05;
-    wait THROW_FOLLOW_RETURN_DELAY;
+    if(get_cfg_int("throw_return")) wait THROW_FOLLOW_RETURN_DELAY;
 
     self unlink();
     mover delete();
-    self setorigin(throw_origin);
-    self setplayerangles(throw_angles);
+    if(get_cfg_int("throw_return"))
+    {
+        self setorigin(throw_origin);
+        self setplayerangles(throw_angles);
+    }
     self thread maps\mp\zombies\_zm::player_out_of_playable_area_monitor();
     self.following_throw = undefined;
 }
@@ -495,6 +500,7 @@ genprac_default_cfg()
     settings_ar["nml_right"] = 1; //gen4
     settings_ar["church"] = 0; //gen6
     settings_ar["teleport_throw"] = THROW_OFF;
+    settings_ar["throw_return"] = 1;
 
     return settings_ar;
 }
