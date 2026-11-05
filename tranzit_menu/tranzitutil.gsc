@@ -71,8 +71,8 @@ tranzit_drop_defaults(settings_ar)
 
 tranzit_drop_menu(menu)
 {
-    add_cfg_toggle(menu, "3% drops", "percent_drops", "^2Yes", "^1No");
-    add_cfg_toggle(menu, "First kill ending Max", "ending_max", "^2Yes", "^1No");
+    add_cfg_toggle(menu, "3% drops", "percent_drops");
+    add_cfg_toggle(menu, "First kill ending Max", "ending_max");
 }
 
 tranzit_arm_ending_max()

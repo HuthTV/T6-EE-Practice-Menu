@@ -108,11 +108,11 @@ mob_plane_settings_menu(settings, min_round, max_round)
     create_option(settings, "Start round: ^3" + get_cfg_int("start_round"), ::cfg_increment_int, "start_round", array(min_round, max_round));
     create_option(settings, "Start round zombies: ^3" + mob_start_zombies_text(), ::cfg_increment_int, "start_zombies", array(START_ZOMBIES_RANDOM, START_ZOMBIES_FULL));
     perks = add_submenu(settings, "perks", "Perks");
-        add_cfg_toggle(perks, "Juggernog", "perk_jugg", "^2Yes", "^1No");
-        add_cfg_toggle(perks, "Double Tap", "perk_dt", "^2Yes", "^1No");
-        add_cfg_toggle(perks, "Speed Cola", "perk_speed", "^2Yes", "^1No");
-        add_cfg_toggle(perks, "Electric Cherry", "perk_cherry", "^2Yes", "^1No");
-        add_cfg_toggle(perks, "Deadshot", "perk_deadshot", "^2Yes", "^1No");
+        add_cfg_toggle(perks, "Juggernog", "perk_jugg");
+        add_cfg_toggle(perks, "Double Tap", "perk_dt");
+        add_cfg_toggle(perks, "Speed Cola", "perk_speed");
+        add_cfg_toggle(perks, "Electric Cherry", "perk_cherry");
+        add_cfg_toggle(perks, "Deadshot", "perk_deadshot");
 }
 
 mob_start_zombies_text()

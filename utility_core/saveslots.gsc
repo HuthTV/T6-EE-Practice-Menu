@@ -7,7 +7,7 @@
 /*##############################################################################
                               Save slots
 ##############################################################################*/
-// Every mode with a "<mode> Settings" menu has SAVESLOT_COUNT saved copies of its
+// Every mode with a settings menu has SAVESLOT_COUNT saved copies of its
 // settings, one cfg file each next to the mode's own (O_PRAC/prewind_slot1.cfg).
 // A slot file holds the mode cfg's keys plus slot_name, the name given in chat.
 // A slot that holds no setting is empty, even when it has a name.
@@ -21,11 +21,10 @@
 #define SAVESLOT_COUNT      4
 #define SAVESLOT_NAME_MAX   16  // Longer names run past the menu's right edge.
 
-// ">Save Slots" row of the mode's Settings, above Restore Defaults.
+// ">Slot n" rows of Presets, above Restore Defaults.
 add_saveslots_menu()
 {
 	if(!saveslots_available()) return;
-	slots = add_submenu("mapsettings", "saveslots", "Save Slots");
 	for(slot = 1; slot <= SAVESLOT_COUNT; slot++)
 	{
 		saved = saveslot_get(slot);
@@ -34,7 +33,7 @@ add_saveslots_menu()
 		if(name != "") label += ": " + name;
 		if(!saveslot_has_settings(saved)) label += " ^9(empty)";
 
-		menu = add_submenu(slots, "saveslot" + slot, label, "Slot " + slot);
+		menu = add_submenu("presets", "saveslot" + slot, label, "Slot " + slot);
 			create_option(menu, "Load and Restart", ::saveslot_load, slot);
 			if(isDefined(self.menu.saveslot_armed) && self.menu.saveslot_armed == slot)
 				create_option(menu, "^1Confirm Overwrite", ::saveslot_save, slot);

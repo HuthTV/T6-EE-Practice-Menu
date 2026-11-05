@@ -53,14 +53,14 @@ victis_initialize()
 victis_build_menu(root)
 {
     victis = add_submenu(root, "victis", "Victis Settings", "Victis");
-        create_option(victis, "Madeup scripts: " + cfgint_compare("victis_madeup", "^2on", "^1off"), ::victis_toggle_madeup);
+        create_option(victis, "Madeup scripts: " + cfgint_compare("victis_madeup"), ::victis_toggle_madeup);
 
         perks = add_submenu(victis, "victis_permaperks", "Permaperks");
             foreach(key in victis_permaperk_keys())
             {
                 // Flopper is Buried only.
                 if(!isdefined(level.pers_upgrades) || !isdefined(level.pers_upgrades[key])) continue;
-                create_option(perks, victis_permaperk_label(key) + ": " + cfgint_compare("perma_" + key, "^2on", "^1off"), ::victis_toggle_permaperk, key);
+                create_option(perks, victis_permaperk_label(key) + ": " + cfgint_compare("perma_" + key), ::victis_toggle_permaperk, key);
             }
 
         options = victis_fridge_options();

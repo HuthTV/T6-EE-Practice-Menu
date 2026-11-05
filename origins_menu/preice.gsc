@@ -4,6 +4,7 @@
 
 #include scripts\zm\utility_core\menu_base;
 #include scripts\zm\utility_core\menu_utility;
+#include scripts\zm\origins_menu\origins;
 #include scripts\zm\origins_menu\segmentutil;
 #include scripts\zm\origins_menu\puzzlerng;
 #inline scripts\zm\origins_menu\oprac;
@@ -216,26 +217,23 @@ preice_auto_round_end()
 ##############################################################################*/
 preice_build_menu(root)
 {
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
         shared_add_location_choice(settings, "start_loc", array(PREICE_LOC_FLOOR, PREICE_LOC_MULE, PREICE_LOC_STG), array("floor", "mule", "STG"));
         self shared_start_time_menu(settings);
-        // STG leaves the dials as the mound opening scrambled them.
-        if(get_cfg_int("start_loc") != PREICE_LOC_STG)
-        {
-            shared_add_disc_turn_choice(settings);
-            add_cfg_toggle(settings, "Skip First Disc", "skip_first_disc", "^2Yes", "^1No");
-        }
-        add_cfg_toggle(settings, "R2L Route", "r2l", "^2Yes", "^1No");
-        add_cfg_toggle(settings, "Early Gram", "early_gram", "^2yes", "^1no");
-        add_cfg_toggle(settings, "MP40 Tile Clue", "mp40_tile_clue", "^2Yes", "^1No");
+        add_cfg_toggle(settings, "R2L Route", "r2l");
         // Cycle 1 Foot picks the second bunker door: only R2L has a choice.
         if(get_cfg_int("r2l")) add_cfg_choice(settings, "Cycle 1 Foot", "trench_path", array("random", "gen2", "gen3"));
+        add_cfg_toggle(settings, "Gram", "early_gram", "^2in hand", "^3placed");
         add_cfg_toggle(settings, "Auto round end", "auto_round_end");
-        create_option(settings, "Auto round end delay: ^3" + get_cfg_int("auto_round_end_delay") + "s", ::cfg_increment_int, "auto_round_end_delay", array(1, 10));
-        add_cfg_toggle(settings, "Peek Code", "peek_code", "^2Yes", "^1No");
+        if(get_cfg_int("auto_round_end")) create_option(settings, "Auto round end delay: ^3" + get_cfg_int("auto_round_end_delay") + "s", ::cfg_increment_int, "auto_round_end_delay", array(1, 10));
 
-    self shared_build_items_menu(root);
-    self shared_build_segment_menus(root);
+    self shared_build_categories(root);
+    self shared_add_item_rows("loadout");
+    // STG leaves the dials as the mound opening scrambled them.
+    has_disc_rows = get_cfg_int("start_loc") != PREICE_LOC_STG;
+    self shared_build_segment_menus(has_disc_rows, has_disc_rows);
+    add_cfg_toggle("ice_code", "MP40 Tile Clue", "mp40_tile_clue");
+    add_cfg_toggle("ice_code", "Peek Code", "peek_code");
 }
 
 preice_default_cfg()

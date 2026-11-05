@@ -36,6 +36,7 @@ register_modes()
 {
 	level.modes = [];
 	mode_timer(register_mode("fullgame",       "Fullgame",        ::fullgame_initialize,       ::fullgame_run,       ::fullgame_build_menu), true, SPLIT_NML);
+	mode_timer(register_mode("panzerstart",    "Panzerstart",     ::panzerstart_initialize,    ::shared_run_segment, ::panzerstart_build_menu), true, SPLIT_ICE);
 	mode_timer(register_mode("preice",         "Pre-Ice",         ::preice_initialize,         ::shared_run_segment, ::preice_build_menu), true, SPLIT_ICE);
 	mode_timer(register_mode("postice",        "Post-Ice",        ::postice_initialize,        ::shared_run_segment, ::postice_build_menu), true, SPLIT_WIND);
 	mode_timer(register_mode("prewind",        "Pre-Wind",        ::prewind_initialize,        ::shared_run_segment, ::prewind_build_menu), true, SPLIT_WIND);
@@ -46,7 +47,6 @@ register_modes()
 	mode_timer(register_mode("postlightning",  "Post-Lightning",  ::postlightning_initialize,  ::shared_run_segment, ::postlightning_build_menu), true, SPLIT_FREEDOM);
 	mode_timer(register_mode("endingprac",     "Ending prac",     ::endingprac_initialize,     ::shared_run_segment, ::endingprac_build_menu), true, SPLIT_FREEDOM);
 	mode_timer(register_mode("hundredkills",   "Raise Hell",      ::hundredkills_initialize,   ::shared_run_segment, ::hundredkills_build_menu), true, SPLIT_FREEDOM);
-	mode_timer(register_mode("panzerstart",    "Panzerstart",     ::panzerstart_initialize,    ::shared_run_segment, ::panzerstart_build_menu), true, SPLIT_ICE);
 	register_mode("genprac",        "Gen Practice",    ::genprac_initialize,        ::genprac_run,        ::genprac_build_menu);
 
 	// Template for new modes (origins_menu\examplemode.gsc); uncomment it and its

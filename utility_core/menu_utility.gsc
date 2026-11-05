@@ -340,8 +340,8 @@ cfgint_compare(setting, d_true, d_false)
     }
     else
     {
-        if(value)   return "^2enabled";
-        else        return "^1disabled";
+        if(value)   return "^2on";
+        else        return "^1off";
     }
 }
 
@@ -354,8 +354,8 @@ int_compare(value, d_true, d_false)
     }
     else
     {
-        if(value)   return "^2enabled";
-        else        return "^1disabled";
+        if(value)   return "^2on";
+        else        return "^1off";
     }
 }
 

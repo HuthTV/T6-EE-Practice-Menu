@@ -45,7 +45,7 @@ examplemode_run()
 // "<mode> Settings" menu, which holds every option only this mode has.
 examplemode_build_menu(root)
 {
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
         add_cfg_toggle(settings, "Example Toggle", "example_toggle");
         add_cfg_choice(settings, "Example Choice", "example_choice", array("first", "second", "third"));
 }

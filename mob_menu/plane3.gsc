@@ -47,7 +47,7 @@ plane3_build_menu(root)
 {
     settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
         mob_plane_settings_menu(settings, 3, PLANE3_MAX_ROUND);
-        add_cfg_toggle(settings, "Tomahawk", "tomahawk", "^2Yes", "^1No");
+        add_cfg_toggle(settings, "Tomahawk", "tomahawk");
 }
 
 plane3_default_cfg()

@@ -157,22 +157,26 @@ postwind_place_player()
 ##############################################################################*/
 postwind_build_menu(root)
 {
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
         shared_add_location_choice(settings, "wind_spawn", array(POSTWIND_LOC_MOUND, POSTWIND_LOC_ENTER), array("mound bulbs", "portal enter"));
         self shared_start_time_menu(settings);
         create_option(settings, "Round: ^3" + get_cfg_int("bulbs_round"), ::cfg_increment_int, "bulbs_round", array(11, 12));
         shared_add_round_zombies_option(settings, "bulbs_round", "bulbs_zombies");
-        shared_add_stg_choice(settings);
-        self shared_boomhilda_menu(settings);
-        add_cfg_toggle(settings, "Smoke 1", "bulbs_smoke_1", "^2completed", "^1incomplete");
-        add_cfg_toggle(settings, "Smoke 2", "bulbs_smoke_2", "^2completed", "^1incomplete");
-        add_cfg_toggle(settings, "Smoke 3", "bulbs_smoke_3", "^2completed", "^1incomplete");
-        add_cfg_toggle(settings, "Trio skip", "trioskip", "^2Yes", "^1No");
 
-    self shared_build_panzer_menu(root);
-    self shared_build_templar_menu(root);
-    self shared_build_robot_menus(root, ::shared_segment_all_random_cycles, shared_robot_earliest_cycle());
-    self puzzle_rng_build_root_menu(root);
+    self shared_build_categories(root);
+    shared_add_stg_choice("loadout");
+    self shared_boomhilda_menu("loadout");
+
+    // Setup solves the rings, so Wind Rings holds only the smokes here.
+    level.puzzle_rng_solved["wind"] = true;
+    wind = add_submenu("puzzles", "wind_rings", "Wind Rings");
+        add_cfg_toggle(wind, "Smoke 1", "bulbs_smoke_1", "^2completed", "^1incomplete");
+        add_cfg_toggle(wind, "Smoke 2", "bulbs_smoke_2", "^2completed", "^1incomplete");
+        add_cfg_toggle(wind, "Smoke 3", "bulbs_smoke_3", "^2completed", "^1incomplete");
+    self puzzle_rng_build_menus("puzzles");
+
+    add_cfg_toggle("special_ai", "Trio skip", "trioskip");
+    self shared_build_ai_menus();
 }
 
 postwind_default_cfg()

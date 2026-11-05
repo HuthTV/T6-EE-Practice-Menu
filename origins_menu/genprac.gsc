@@ -95,7 +95,7 @@ on_player_spawned_gen()
 
 genprac_build_menu(root)
 {
-	gen_prac = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
+	gen_prac = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
 		gens = add_submenu(gen_prac, "gens", "Active Gens", "Gens");
 			create_option(gens, "Activate All", ::genprac_reset_all_gens);
 			add_cfg_toggle(gens, "Gen 1", "start_bunker");

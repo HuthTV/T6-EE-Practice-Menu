@@ -328,23 +328,27 @@ fullgame_box_hit_weights(keys)
 
 fullgame_build_menu(root)
 {
-	settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
+	settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
 		add_cfg_toggle(settings, "Super Fast Restarts", "turbo_restarts"); // Other modes handle setup timescale themselves.
 
-		presets = add_submenu(settings, "presets", "Game Presets", "Presets");
-			create_option(presets, "Normal 29 rng", ::fullgame_apply_preset, "normal");
-			create_option(presets, "Perfect 29 rng", ::fullgame_apply_preset, "perfect");
-			create_option(presets, "Fast 4 box slushie", ::fullgame_apply_preset, "slushie");
-			create_option(presets, "Fast 4 box snowy", ::fullgame_apply_preset, "snowy");
+	create_option("presets", "Normal 29 rng", ::fullgame_apply_preset, "normal");
+	create_option("presets", "Perfect 29 rng", ::fullgame_apply_preset, "perfect");
+	create_option("presets", "Fast 4 box slushie", ::fullgame_apply_preset, "slushie");
+	create_option("presets", "Fast 4 box snowy", ::fullgame_apply_preset, "snowy");
 
-	self shared_build_robot_menus(root, ::fullgame_all_random_cycles);
-	self shared_build_templar_menu(root);
+	self shared_build_categories(root);
+	self shared_build_parts_menu("loadout");
+	self shared_build_vinyls_menu("loadout");
 
-	self shared_build_vinyls_menu(root);
-	self shared_build_parts_menu(root);
+	self shared_build_disc_menu("puzzles");
+	self puzzle_rng_build_menus("puzzles");
 
-	randomness = add_submenu(root, "randomness", "Randomness", "RNG");
-		digs = add_submenu(randomness, "digs", "Dig Settings", "Digs");
+	self shared_build_robot_menus("special_ai", ::fullgame_all_random_cycles);
+	self shared_build_panzer_menu("special_ai");
+	self shared_build_templar_menu("special_ai");
+
+	randomness = add_submenu(root, "randomness", "RNG");
+		digs = add_submenu(randomness, "digs", "Digs");
 			add_cfg_toggle(digs, "Trenches", "bunker_dig", "^3early", "^3normal");
 			add_cfg_toggle(digs, "NML", "nml_dig", "^3early", "^3normal");
 			add_cfg_toggle(digs, "Church", "village_dig", "^3early", "^3normal");
@@ -356,16 +360,6 @@ fullgame_build_menu(root)
 			add_cfg_toggle(digs, "Round 4 Snow", "r4_snow");
 			add_cfg_toggle(digs, "Points Always 250", "250_digs");
 
-		self shared_build_disc_menu(randomness);
-
-		fizz = add_submenu(randomness, "fizz", "Wunderfizz", "Fizz");
-			perks = array("^1r^3a^2n^5d^4o^1m ^3p^2e^5r^4k", "^3double tap", "^2speed cola", "^8deadshot", "^1juggernog", "^3stamin-up", "^2mule kick", "^6PhD flopper", "^9electric cherry", "^5quick revive");
-			add_cfg_choice(fizz, "Location", "fizz_location", array("random", "gen 4", "gen 5"));
-			add_cfg_choice(fizz, "Fizz 1", "fizz_1", perks);
-			add_cfg_choice(fizz, "Fizz 2", "fizz_2", perks);
-
-		self shared_build_panzer_menu(randomness);
-
 		box = add_submenu(randomness, "box", "Mystery Box", "Box");
 			add_cfg_choice(box, "Location", "box_location", array("random", "gen 3", "gen 2"));
 			add_cfg_choice(box, "Box tier", "box_tier", array("normal", "S", "A", "B", "C", "D", "MK2"));
@@ -374,12 +368,15 @@ fullgame_build_menu(root)
 			add_cfg_choice(box, "Hit 1", "box_hit_1", box_guns.labels);
 			add_cfg_choice(box, "Hit 2", "box_hit_2", box_guns.labels);
 
+		fizz = add_submenu(randomness, "fizz", "Wunderfizz", "Fizz");
+			perks = array("^1r^3a^2n^5d^4o^1m ^3p^2e^5r^4k", "^3double tap", "^2speed cola", "^8deadshot", "^1juggernog", "^3stamin-up", "^2mule kick", "^6PhD flopper", "^9electric cherry", "^5quick revive");
+			add_cfg_choice(fizz, "Location", "fizz_location", array("random", "gen 4", "gen 5"));
+			add_cfg_choice(fizz, "Fizz 1", "fizz_1", perks);
+			add_cfg_choice(fizz, "Fizz 2", "fizz_2", perks);
+
 		powerups = add_submenu(randomness, "powerups", "Powerups");
 			add_cfg_choice(powerups, "First Powerup", "fullgame_first_powerup", array("random", "nuke", "double points", "max ammo", "zombie blood", "insta kill"));
 			add_cfg_toggle(powerups, "Fist of Iron Nuke", "fullgame_fist_of_iron_nuke");
-
-
-		self puzzle_rng_build_menus(randomness);
 }
 
 

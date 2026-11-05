@@ -4,6 +4,7 @@
 
 #include scripts\zm\utility_core\menu_base;
 #include scripts\zm\utility_core\menu_utility;
+#include scripts\zm\origins_menu\origins;
 #include scripts\zm\origins_menu\segmentutil;
 #include scripts\zm\origins_menu\puzzlerng;
 #include scripts\zm\origins_menu\staffutil;
@@ -103,17 +104,17 @@ postfire_setup()
 
 postfire_build_menu(root)
 {
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
         shared_add_location_choice(settings, "fire_spawn", array(POSTFIRE_LOC_KILLS, POSTFIRE_LOC_TORCHES), array("fire kills enter", "torches"));
         self shared_start_time_menu(settings);
-        add_cfg_toggle(settings, "Trio skip", "trioskip", "^2Yes", "^1No");
-        shared_add_stg_choice(settings);
-        self shared_boomhilda_menu(settings);
-        create_option(settings, "Ice prefills: ^3" + get_cfg_int("ice_souls"), ::cfg_increment_int, "ice_souls", array(0, ICE_SOULS_MAX));
-        add_cfg_toggle(settings, "Skip First Disc", "skip_first_disc", "^2Yes", "^1No");
 
-    self shared_build_items_menu(root);
-    self shared_build_segment_menus(root);
+    self shared_build_categories(root);
+    shared_add_stg_choice("loadout");
+    self shared_boomhilda_menu("loadout");
+    self shared_add_item_rows("loadout");
+    shared_add_ice_souls_row("puzzles");
+    add_cfg_toggle("special_ai", "Trio skip", "trioskip");
+    self shared_build_segment_menus(false, true);
 }
 
 postfire_default_cfg()

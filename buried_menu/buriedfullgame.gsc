@@ -73,7 +73,7 @@ buriedfullgame_default_cfg()
 buriedfullgame_build_menu(root)
 {
     settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
-        add_cfg_toggle(settings, "3% drops", "percent_drops", "^2Yes", "^1No");
+        add_cfg_toggle(settings, "3% drops", "percent_drops");
         add_cfg_choice(settings, "1st ghost round perk", "ghost_perk", buriedfullgame_perk_options().labels);
 
         box = add_submenu(settings, "box", "Mystery Box", "Box");

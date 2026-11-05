@@ -188,23 +188,25 @@ hundredkills_remove_biplane()
 ##############################################################################*/
 hundredkills_build_menu(root)
 {
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
         self shared_start_time_menu(settings);
         create_option(settings, "Round: ^3" + get_cfg_int("kills_round"), ::cfg_increment_int, "kills_round", array(16, 17));
-        stg_text = "^1No";
-        if(get_cfg_int("stg_start") == STG_PAPPED) stg_text = "^2Yes";
-        create_option(settings, "STG PaP: " + stg_text, ::hundredkills_stg_toggle);
-        self shared_boomhilda_menu(settings);
-        // The Raise Hell visit's walls (puzzle_rng): up to two staffs the wall
-        // never lands on (user, 2026-11-04).
-        names = puzzle_rng_chamber_names();
-        choices = array("none", names[0], names[1], names[2], names[3]);
-        add_cfg_choice(settings, "Clear wall", "chamber_v" + KILLS_WALLS_VISIT + "_a", choices);
-        add_cfg_choice(settings, "Clear wall", "chamber_v" + KILLS_WALLS_VISIT + "_b", choices);
+
+    self shared_build_categories(root);
+    stg_text = "^1off";
+    if(get_cfg_int("stg_start") == STG_PAPPED) stg_text = "^2on";
+    create_option("loadout", "STG PaP: " + stg_text, ::hundredkills_stg_toggle);
+    self shared_boomhilda_menu("loadout");
+
+    // The Raise Hell visit's walls (puzzle_rng): up to two staffs the wall
+    // never lands on (user, 2026-11-04).
+    names = puzzle_rng_chamber_names();
+    choices = array("none", names[0], names[1], names[2], names[3]);
+    add_cfg_choice("puzzles", "Clear wall", "chamber_v" + KILLS_WALLS_VISIT + "_a", choices);
+    add_cfg_choice("puzzles", "Clear wall", "chamber_v" + KILLS_WALLS_VISIT + "_b", choices);
 
     // No Panzer or robot menus (user, 2026-11-04): the segment needs neither.
-    templars = add_submenu(root, "templars", "Templars");
-        add_cfg_choice(templars, "Templars", "kills_templar", array("no", "round 16", "round 17", "random"));
+    add_cfg_choice("special_ai", "Templars", "kills_templar", array("no", "round 16", "round 17", "random"));
 }
 
 // "STG PaP": the STG is always acquired, plain or upgraded.

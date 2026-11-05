@@ -284,11 +284,18 @@ shared_relay_labels()
 	return array("Spawn", "Gen2", "Gen4", "Gen5", "Middle", "Bot Church", "Top Church");
 }
 
-shared_build_relays_menu(root)
+shared_build_relays_menu(parent)
 {
-	relays = add_submenu(root, "relays", "Electric Relays", "Relays");
-		keys = shared_relay_keys();
-		labels = shared_relay_labels();
+	keys = shared_relay_keys();
+	labels = shared_relay_labels();
+
+	// With every relay fixed by the route there is nothing to set.
+	has_choice = false;
+	foreach(key in keys)
+		if(!shared_relay_forced(key)) has_choice = true;
+	if(!has_choice) return;
+
+	relays = add_submenu(parent, "relays", "Electric Relays", "Relays");
 		for(i = 0; i < keys.size; i++)
 			shared_add_relay_row(relays, labels[i], keys[i]);
 }
@@ -566,6 +573,7 @@ shared_set_round(target_round, remaining_zombies)
     if(isdefined(remaining_zombies)) first_live_round++;
     shared_schedule_catch_up(level.panzer_schedule, first_live_round);
     shared_schedule_catch_up(level.templar_schedule, first_live_round);
+    level.shared_templars_i_done = level.templar_schedule.count > 0; // Hides Templars I in the menu.
 
     practice_set_round(target_round, remaining_zombies);
 }
@@ -2115,31 +2123,41 @@ shared_add_stg_choice(menu)
 
 // Items with no location setting (shared_get_parts). Discs, Maxis and shield
 // parts are collected through Part Locations and Vinyl Locations.
-shared_build_items_menu(root)
+shared_add_item_rows(items)
 {
-    items = add_submenu(root, "items", "Items settings", "Items");
-        if(level.segment.ice_route)
-        {
-            add_cfg_toggle(items, "Plane Shot", "kill_plane");
-            create_option(items, "Plane Part: " + cfgint_compare("plane_part", "^2collected", "^1disperse"), ::shared_plane_part_toggle);
-        }
-        if(shared_drone_option()) add_cfg_toggle(items, "Maxis Drone", "maxis_drone_crafted", "^2crafted", "^3not crafted");
-        if(level.segment.ice_route) add_cfg_toggle(items, "Fizz DT", "dt_start");
-        add_cfg_toggle(items, "115 Reward", "headshot_reward");
+    if(level.segment.ice_route)
+    {
+        add_cfg_toggle(items, "Plane Shot", "kill_plane");
+        create_option(items, "Plane Part: " + cfgint_compare("plane_part", "^2collected", "^1disperse"), ::shared_plane_part_toggle);
+    }
+    if(shared_drone_option()) add_cfg_toggle(items, "Maxis Drone", "maxis_drone_crafted", "^2crafted", "^3not crafted");
+    if(level.segment.ice_route) add_cfg_toggle(items, "Fizz DT", "dt_start");
+    add_cfg_toggle(items, "Headshot Reward", "headshot_reward");
 }
 
-// The menus after a staff start's own (Settings, Items): locations, discs,
-// relays, Templars, Panzers, robots and puzzle RNG.
-shared_build_segment_menus(root)
+shared_add_ice_souls_row(menu)
 {
-    self shared_build_parts_menu(root);
-    self shared_build_vinyls_menu(root);
-    self shared_build_disc_menu(root);
-    self shared_build_relays_menu(root);
-    self shared_build_templar_menu(root);
-    self shared_build_panzer_menu(root);
-    self shared_build_robot_menus(root, ::shared_segment_all_random_cycles, shared_robot_earliest_cycle());
-    self puzzle_rng_build_root_menu(root);
+    create_option(menu, "Ice Staff Souls: ^3" + get_cfg_int("ice_souls"), ::cfg_increment_int, "ice_souls", array(0, ICE_SOULS_MAX));
+}
+
+// The shared menus of a staff start, after the rows it adds to the categories
+// itself (STG, Trio skip): locations, discs, puzzle RNG, relays and Special AI.
+shared_build_segment_menus(show_disc_turn = false, show_skip_first = false)
+{
+    self shared_build_parts_menu("loadout");
+    self shared_build_vinyls_menu("loadout");
+    self shared_build_disc_menu("puzzles", show_disc_turn, show_skip_first);
+    self puzzle_rng_build_menus("puzzles");
+    self shared_build_relays_menu("puzzles");
+    self shared_build_ai_menus();
+}
+
+// Special AI menus of a segment start.
+shared_build_ai_menus(show_rain_robot = true)
+{
+    self shared_build_robot_menus("special_ai", ::shared_segment_all_random_cycles, shared_robot_earliest_cycle(), show_rain_robot);
+    self shared_build_panzer_menu("special_ai");
+    self shared_build_templar_menu("special_ai");
 }
 
 shared_plane_part_toggle()

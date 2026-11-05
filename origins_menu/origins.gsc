@@ -61,6 +61,7 @@ shared_r2l_hud_spot()
 
 shared_build_hud(hud)
 {
+	if(isdefined(level.segment) && is_true(level.segment.panzer_health_hud)) add_cfg_toggle(hud, "Panzer Health HUD", "hud");
 	if(mode_has_robot_cycles())
 	{
 		create_option(hud, "Cycle display: " + cfgint_compare("cycle_tracker"), ::shared_toggle_cycle_display);
@@ -195,13 +196,25 @@ mode_has_robot_cycles()
 /*##############################################################################
                               Menus shared by several segment modes
 ##############################################################################*/
-// Mound disc presets, then one submenu per scramble still ahead in this mode.
-shared_build_disc_menu(parent)
+// The root categories of every Origins mode with something to put in them. A
+// category left empty is hidden, so a mode just fills the ones it needs.
+shared_build_categories(root)
 {
-	discs = add_submenu(parent, "discs", "Mound discs", "Discs");
+	add_submenu(root, "loadout", "Loadout & Items", "Loadout");
+	add_submenu(root, "puzzles", "Puzzles & Map State", "Puzzles");
+	add_submenu(root, "special_ai", "Special AI");
+}
+
+// Mound disc presets, the start's disc rows, then one submenu per scramble still
+// ahead in this mode.
+shared_build_disc_menu(parent, show_disc_turn = false, show_skip_first = false)
+{
+	discs = add_submenu(parent, "discs", "Mound Discs", "Discs");
 		create_option(discs, "Optimal Discs", ::shared_perfect_discs);
 		create_option(discs, "Worst Discs", ::shared_worst_discs);
 		create_option(discs, "Random Discs", ::shared_random_discs);
+		if(show_disc_turn) shared_add_disc_turn_choice(discs);
+		if(show_skip_first) add_cfg_toggle(discs, "Skip First Disc", "skip_first_disc");
 
 	numerals = array("I", "II", "III", "IV");
 	labels = array("Top: ", "2nd: ", "3rd: ", "Bot: ");
@@ -228,8 +241,11 @@ shared_first_scramble()
 shared_build_templar_menu(parent)
 {
 	templars = add_submenu(parent, "templars", "Templars");
+		// A start past the first attack has Templars I behind it (shared_set_round).
+		first_set = 1;
+		if(is_true(level.shared_templars_i_done)) first_set = 2;
 		numerals = array("I", "II", "III");
-		for(set = 1; set <= 3; set++)
+		for(set = first_set; set <= 3; set++)
 		{
 			gens = add_submenu(templars, "templars_" + set, "Templars " + numerals[set - 1], "Temps " + numerals[set - 1]);
 				for(gen = 1; gen <= 6; gen++)
@@ -275,7 +291,7 @@ shared_add_part_choice(menu, key)
 
 shared_part_in_drone()
 {
-	self iprintln("Maxis Drone is set to crafted (Items settings)");
+	self iprintln("Maxis Drone is set to crafted (Loadout & Items)");
 }
 
 shared_maxis_brain()

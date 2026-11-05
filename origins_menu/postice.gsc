@@ -5,6 +5,7 @@
 #include scripts\zm\utility_core\menu_base;
 #include scripts\zm\utility_core\menu_utility;
 #include scripts\zm\utility_core\rounds;
+#include scripts\zm\origins_menu\origins;
 #include scripts\zm\origins_menu\segmentutil;
 #include scripts\zm\origins_menu\staffutil;
 #include scripts\zm\origins_menu\puzzlerng;
@@ -168,20 +169,22 @@ postice_spots()
 ##############################################################################*/
 postice_build_menu(root)
 {
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
         shared_add_location_choice(settings, "start_loc", array(POSTICE_LOC_ENTER, POSTICE_LOC_EXIT), array("ice code enter", "ice code exit"));
         self shared_start_time_menu(settings);
         create_option(settings, "Zombies killed: ^3" + postice_kills() + " ^7(of " + practice_round_zombie_count(10) + ")", ::cfg_increment_int, "icecode_kills", array(0, POSTICE_KILLS_MAX));
-        self shared_boomhilda_menu(settings);
-        add_cfg_toggle(settings, "Skip First Disc", "skip_first_disc", "^2Yes", "^1No");
-        add_cfg_toggle(settings, "R2L Route", "r2l", "^2Yes", "^1No");
-        // The tile clue is for the code still to do.
-        if(get_cfg_int("start_loc") != POSTICE_LOC_EXIT) add_cfg_toggle(settings, "MP40 Tile Clue", "mp40_tile_clue", "^2Yes", "^1No");
+        add_cfg_toggle(settings, "R2L Route", "r2l");
         // Cycle 1 Foot picks the second bunker door: only R2L has a choice.
         if(get_cfg_int("r2l")) add_cfg_choice(settings, "Cycle 1 Foot", "trench_path", array("random", "gen2", "gen3"));
 
-    self shared_build_items_menu(root);
-    self shared_build_segment_menus(root);
+    self shared_build_categories(root);
+    self shared_boomhilda_menu("loadout");
+    self shared_add_item_rows("loadout");
+    // The exit start has the code done: only the code still to do has rows.
+    code_ahead = get_cfg_int("start_loc") != POSTICE_LOC_EXIT;
+    level.puzzle_rng_solved["ice"] = !code_ahead;
+    self shared_build_segment_menus(false, true);
+    if(code_ahead) add_cfg_toggle("ice_code", "MP40 Tile Clue", "mp40_tile_clue");
 }
 
 postice_default_cfg()

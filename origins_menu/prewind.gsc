@@ -4,6 +4,7 @@
 
 #include scripts\zm\utility_core\menu_base;
 #include scripts\zm\utility_core\menu_utility;
+#include scripts\zm\origins_menu\origins;
 #include scripts\zm\origins_menu\segmentutil;
 #include scripts\zm\origins_menu\puzzlerng;
 #include scripts\zm\origins_menu\staffutil;
@@ -102,21 +103,20 @@ prewind_setup()
 prewind_build_menu(root)
 {
     location = get_cfg_int("wind_spawn");
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
         shared_add_location_choice(settings, "wind_spawn", array(PREWIND_LOC_CRAFT, PREWIND_LOC_STG, PREWIND_LOC_EXIT), array("Craft", "STG", "Exit"));
         self shared_start_time_menu(settings);
-        // No Trio skip: Craft, STG and Exit always use the round 12 trio.
-        shared_add_stg_choice(settings);
-        self shared_boomhilda_menu(settings);
-        // Disc Turn is for the Craft start: Exit keeps the normal scramble, STG
-        // leaves the dials as scrambled.
-        if(location == PREWIND_LOC_CRAFT) shared_add_disc_turn_choice(settings);
-        if(location != PREWIND_LOC_STG) add_cfg_toggle(settings, "Skip First Disc", "skip_first_disc", "^2Yes", "^1No");
         create_option(settings, "Start Round: ^3" + get_cfg_int("wind_start_round"), ::cfg_increment_int, "wind_start_round", array(11, 12));
-        create_option(settings, "Ice prefills: ^3" + get_cfg_int("ice_souls"), ::cfg_increment_int, "ice_souls", array(0, ICE_SOULS_MAX));
 
-    self shared_build_items_menu(root);
-    self shared_build_segment_menus(root);
+    self shared_build_categories(root);
+    shared_add_stg_choice("loadout");
+    self shared_boomhilda_menu("loadout");
+    self shared_add_item_rows("loadout");
+    shared_add_ice_souls_row("puzzles");
+    // No Trio skip: Craft, STG and Exit always use the round 12 trio.
+    // Disc Turn is for the Craft start: Exit keeps the normal scramble, STG
+    // leaves the dials as scrambled.
+    self shared_build_segment_menus(location == PREWIND_LOC_CRAFT, location != PREWIND_LOC_STG);
 }
 
 prewind_default_cfg()

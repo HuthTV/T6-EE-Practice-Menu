@@ -40,39 +40,36 @@
                               Menu tree
 ##############################################################################*/
 // Builds every menu. Builds again after change, so labels always show current values.
-// Practice Modes is always first. The mode's menus follow, starting with its
-// "<mode> Settings"; General Settings, always last, holds only options every mode has.
+// The root keeps one order in every mode (root_menu_order). Presets exists before the
+// mode builds, so a mode can add its own presets above the save slots.
 build_menu_tree()
 {
 	root = self.menu.root;
 	create_menu(root, undefined, level.mode.label);
 
 	self build_modes_menu(root);
+	add_submenu(root, "presets", "Presets");
 	if(isDefined(level.mode.build_menu))
 		self [[ level.mode.build_menu ]](root);
 	if(isDefined(level.practice_map.build_map_menu))
 		self [[ level.practice_map.build_map_menu ]](root);
 	self add_saveslots_menu();
 	self add_restore_defaults_option();
-	self build_timer_menu(root);
 	self build_hud_menu(root);
 	self build_cheats_menu(root);
-	self build_change_map_menu(root);
 	self build_general_menu(root);
 	self sort_root_menu();
 }
 
-// The root rows in the order of common use. Menus are listed by id; a mode's own
-// menus that are not listed (Items, Relays, Active Gens) come right after the
-// mode's Settings, then the map's own menu (Victis Settings). Each mode builds
-// only the menus it has.
+// The root rows in the order of common use, by menu id. A root menu that ends up
+// empty is hidden (sort_root_menu), so each mode shows only the menus it has.
 root_menu_order()
 {
-	return array("gamemodes", "mapsettings", "victis", "HUD", "randomness", "cycles", "feet", "templars", "timer", "cheats", "vinyls", "parts", "changemap", "general");
+	return array("gamemodes", "mapsettings", "loadout", "puzzles", "special_ai", "randomness", "victis", "HUD", "cheats", "presets", "general");
 }
 
-// Stable sort of the root menu's rows by root_menu_order. Rows that are not a
-// submenu keep the rank of an unlisted menu.
+// Stable sort of the root menu's rows by root_menu_order, leaving out submenus with
+// no rows. Rows that are not a submenu keep the rank of an unlisted menu.
 sort_root_menu()
 {
 	root = self.menu.root;
@@ -95,6 +92,7 @@ sort_root_menu()
 	sorted = [];
 	for(row = 0; row < count; row++)
 	{
+		if(self.menu.option_func[root][row] == ::enter_menu && !self.menu.option_text[self.menu.option_arg1[root][row]].size) continue;
 		pos = sorted.size;
 		while(pos > 0 && ranks[sorted[pos - 1]] > ranks[row]) pos--;
 		for(j = sorted.size; j > pos; j--) sorted[j] = sorted[j - 1];
@@ -105,7 +103,7 @@ sort_root_menu()
 	func = [];
 	arg1 = [];
 	arg2 = [];
-	for(i = 0; i < count; i++)
+	for(i = 0; i < sorted.size; i++)
 	{
 		text[i] = self.menu.option_text[root][sorted[i]];
 		func[i] = self.menu.option_func[root][sorted[i]];
@@ -131,7 +129,7 @@ build_modes_menu(root)
 	}
 }
 
-// Last row of the mode's "<mode> Settings" (every mode builds it as "mapsettings").
+// Last row of Presets, for a mode with settings (every mode builds them as "mapsettings").
 // It deletes the mode's saved cfg and writes a new one from the defaults, so every
 // setting of the mode resets, not only that menu's, and keys left by older
 // versions go too. It asks once before doing it.
@@ -140,9 +138,9 @@ add_restore_defaults_option()
 	if(!isDefined(self.menu.option_text["mapsettings"]) || !isDefined(level.mode_cfg_defaults)) return;
 	// Short: a long row runs past the menu's right edge.
 	if(is_true(self.menu.restore_armed))
-		create_option("mapsettings", "^1Confirm Restore Defaults", ::restore_mode_defaults);
+		create_option("presets", "^1Confirm Restore Defaults", ::restore_mode_defaults);
 	else
-		create_option("mapsettings", "Restore " + level.mode.label + " Defaults", ::restore_mode_defaults);
+		create_option("presets", "Restore " + level.mode.label + " Defaults", ::restore_mode_defaults);
 }
 
 // Leaving the row (cursor move, back) cancels a pending "Confirm Restore" or a
@@ -172,18 +170,17 @@ restore_mode_defaults()
 }
 
 // Modes that declare a timer (mode_timer). Split changes apply on restart.
-build_timer_menu(root)
+build_timer_menu(parent)
 {
 	timer = level.mode.timer;
 	if(!isDefined(timer)) return;
 	labels = level.practice_map.split_labels;
-	menu = add_submenu(root, "timer", "Timer");
+	menu = add_submenu(parent, "timer", "Timer");
 		create_option(menu, "HUD Timer: " + cfgint_compare("timer_main"), ::toggle_timer_main);
 		if(timer.segment) create_option(menu, "Segment Timer: " + cfgint_compare("timer_segment"), ::toggle_timer_segment);
-		splits = add_submenu(menu, "timer_splits", "Active splits", "Splits");
-			for(i = timer.first_split; i < labels.size - 1; i++)
-				add_cfg_toggle(splits, labels[i], split_setting(i));
-			create_option(splits, labels[labels.size - 1] + ": ^2always", ::timer_last_split_fixed);
+		for(i = timer.first_split; i < labels.size - 1; i++)
+			add_cfg_toggle(menu, labels[i], split_setting(i));
+		create_option(menu, labels[labels.size - 1] + ": ^2always", ::timer_last_split_fixed);
 }
 
 timer_last_split_fixed()
@@ -195,9 +192,9 @@ timer_last_split_fixed()
 // plain map command with the gametype dvars gives the Victis maps no session
 // with permaperks). Each map's practice script loads with its map, so the new
 // map opens with its own menu when that map's script is installed.
-build_change_map_menu(root)
+build_change_map_menu(parent)
 {
-	menu = add_submenu(root, "changemap", "Change Map");
+	menu = add_submenu(parent, "changemap", "Change Map");
 		add_change_map_option(menu, "Origins", "zm_tomb", "tomb");
 		add_change_map_option(menu, "Mob of the Dead", "zm_prison", "prison");
 		add_change_map_option(menu, "TranZit", "zm_transit", "transit");
@@ -225,17 +222,21 @@ change_map(map, location)
 // Options every mode has. Anything mode specific goes in the modes own menu.
 build_general_menu(root)
 {
-	general = add_submenu(root, "general", "General Settings", "General");
-		create_option(general, "Show Identifier/Hashes: " + cfgint_compare("show_identifier", "^2Yes", "^1No"), ::basegame_toggle_show_identifier);
+	general = add_submenu(root, "general", "General");
+		self build_change_map_menu(general);
+		create_option(general, "Show Identifier/Hashes: " + cfgint_compare("show_identifier"), ::basegame_toggle_show_identifier);
 		add_cfg_choice(general, "Menu Key (with melee)", "menu_key", array("special grenade", "dpad slot 1"));
 		create_option(general, "Rage Quit", ::fast_quit);
 }
 
-// Core rows, the map's top rows (build_hud_top) after the Speedometer, then the
-// map's rows (build_hud). Order by the user, 2026-11-02.
+// >Timer when the mode has one, core rows, the map's top rows (build_hud_top) after
+// the Speedometer, then the map's rows (build_hud). Order by the user, 2026-11-02.
 build_hud_menu(root)
 {
-	hud = add_submenu(root, "HUD", "HUD");
+	label = "HUD";
+	if(isDefined(level.mode.timer)) label = "HUD & Timer";
+	hud = add_submenu(root, "HUD", label);
+		self build_timer_menu(hud);
 		add_cfg_toggle(hud, "Zombies Spawned", "hud_spawned");
 		add_cfg_toggle(hud, "Zombies Remaining", "hud_remaning");
 		create_option(hud, "Speedometer: " + cfgint_compare("hud_speed"), ::cfg_toggle_speedometer);
@@ -244,7 +245,7 @@ build_hud_menu(root)
 		oopa = array("^1off", "^2on");
 		if(isDefined(level.practice_map.oopa_hud_spot_label)) oopa[2] = "^3" + level.practice_map.oopa_hud_spot_label;
 		add_cfg_choice(hud, "OOPA Countdown", "hud_oopa", oopa);
-		add_cfg_choice(hud, "Point based", "hud_points", array("^1disabled", "^3relative", "^3absolute"));
+		add_cfg_choice(hud, "Point based", "hud_points", array("^1off", "^3relative", "^3absolute"));
 		add_cfg_toggle(hud, "Health Bar", "hud_health");
 		add_cfg_toggle(hud, "Current Zone", "hud_zone");
 		add_cfg_toggle(hud, "Active Zones", "hud_active_zones");
@@ -258,7 +259,7 @@ build_hud_menu(root)
 build_cheats_menu(root)
 {
 	cheats = add_submenu(root, "cheats", "Cheats");
-		add_cfg_toggle(cheats, "OOPA", "oopa");
+		add_cfg_toggle(cheats, "OOPA Death", "oopa");
 		create_option(cheats, "Demigod: " + int_compare(self.demigod), ::toggle_demigod);
 		drops = add_submenu(cheats, "drops", "Give drop");
 			add_drop_option(drops, "Nuke", "nuke");

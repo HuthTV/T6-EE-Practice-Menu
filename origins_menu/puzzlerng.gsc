@@ -17,8 +17,8 @@
 //   Fire torches   the same, Pre-Fire, Post-Fire
 //   Crazy Place walls   the same, Pre-Lightning, Post-Lightning
 // A mode calls puzzle_rng_install and puzzle_rng_defaults while it loads, and its
-// menu calls puzzle_rng_build_menus (Fullgame, inside its Randomness menu) or
-// puzzle_rng_build_root_menu (the segment starts, a Randomness menu of their own).
+// menu calls puzzle_rng_build_menus (Puzzles & Map State). A start whose setup has
+// already solved a puzzle sets level.puzzle_rng_solved for it, which only hides its rows.
 // The puzzles read their settings when they start, so a change applies on restart.
 
 // Whether the mode still has this puzzle ahead (puzzle_rng_install).
@@ -40,6 +40,7 @@ puzzle_rng_has(puzzle)
 puzzle_rng_install(first)
 {
     level.puzzle_rng_first = first;
+    level.puzzle_rng_solved = [];
     if(puzzle_rng_has("ice"))  replacefunc(maps\mp\zm_tomb_quest_ice::change_ice_gem_value, ::puzzle_rng_change_ice_gem_value);
     if(puzzle_rng_has("wind")) replacefunc(maps\mp\zm_tomb_quest_air::ceiling_ring_randomize, ::puzzle_rng_ceiling_ring_randomize);
     if(puzzle_rng_has("fire")) replacefunc(maps\mp\zm_tomb_quest_fire::fire_puzzle_2_init, ::puzzle_rng_fire_puzzle_2_init);
@@ -67,19 +68,17 @@ puzzle_rng_defaults(settings_ar)
     return settings_ar;
 }
 
-// The segment starts have no Randomness menu otherwise.
-puzzle_rng_build_root_menu(root)
+// Whether the puzzle has rows to set: still ahead and not solved at setup.
+puzzle_rng_shows(puzzle)
 {
-    if(!puzzle_rng_has("chamber")) return;
-    rng = add_submenu(root, "randomness", "Randomness", "RNG");
-    self puzzle_rng_build_menus(rng);
+    return puzzle_rng_has(puzzle) && !is_true(level.puzzle_rng_solved[puzzle]);
 }
 
 puzzle_rng_build_menus(parent)
 {
-    if(puzzle_rng_has("ice"))
+    if(puzzle_rng_shows("ice"))
     {
-        ice = add_submenu(parent, "ice_code", "Ice Code Order", "Ice Code");
+        ice = add_submenu(parent, "ice_code", "Ice Code");
             // Row = a tile, left to right as seen from the shooting spot; value =
             // which shot of the code it is. 1 6 5 4 3 2 is the optimal order.
             for(tile = 1; tile <= 6; tile++)
@@ -92,7 +91,7 @@ puzzle_rng_build_menus(parent)
             create_option(ice, "Optimal (1 6 5 4 3 2)", ::puzzle_rng_ice_optimal);
             create_option(ice, "All random", ::puzzle_rng_ice_random);
     }
-    if(puzzle_rng_has("wind"))
+    if(puzzle_rng_shows("wind"))
     {
         wind = add_submenu(parent, "wind_rings", "Wind Rings", "Wind Rings");
             // Shots each ring needs. The game gives every ring 1 to 3, so one shot
@@ -104,24 +103,6 @@ puzzle_rng_build_menus(parent)
             wind_keys = array("wind_ring_1", "wind_ring_2", "wind_ring_3", "wind_ring_4");
             create_option(wind, "All 1 shot (best)", ::puzzle_rng_set_keys, wind_keys, 1);
             create_option(wind, "All random", ::puzzle_rng_set_keys, wind_keys, 0);
-    }
-    if(puzzle_rng_has("chamber"))
-    {
-        // Per visit to the Crazy Place (see the Crazy Place walls section), up to two
-        // staffs to clear. The wall never lands on a cleared staff during the visit.
-        walls = add_submenu(parent, "chamber_walls", "Crazy Place Walls", "Walls");
-            names = puzzle_rng_chamber_names();
-            choices = array("none", names[0], names[1], names[2], names[3]);
-            wall_keys = [];
-            for(visit = puzzle_rng_first_visit(); visit <= puzzle_rng_visit_count(); visit++)
-            {
-                page = add_submenu(walls, "chamber_visit_" + visit, puzzle_rng_visit_row(visit) + puzzle_rng_visit_text(visit), puzzle_rng_visit_title(visit));
-                    add_cfg_choice(page, "Clear staff", "chamber_v" + visit + "_a", choices);
-                    add_cfg_choice(page, "Clear staff", "chamber_v" + visit + "_b", choices);
-                wall_keys[wall_keys.size] = "chamber_v" + visit + "_a";
-                wall_keys[wall_keys.size] = "chamber_v" + visit + "_b";
-            }
-            create_option(walls, "All random", ::puzzle_rng_set_keys, wall_keys, 0);
     }
     if(puzzle_rng_has("fire") && isDefined(level.puzzle_fire_sizes))
     {
@@ -153,6 +134,24 @@ puzzle_rng_build_menus(parent)
             }
             create_option(fire, "Optimal (7 5 3)", ::puzzle_rng_fire_set_optimal);
             create_option(fire, "All random", ::puzzle_rng_set_keys, keys, 0);
+    }
+    if(puzzle_rng_has("chamber"))
+    {
+        // Per visit to the Crazy Place (see the Crazy Place walls section), up to two
+        // staffs to clear. The wall never lands on a cleared staff during the visit.
+        walls = add_submenu(parent, "chamber_walls", "Crazy Place Walls", "Walls");
+            names = puzzle_rng_chamber_names();
+            choices = array("none", names[0], names[1], names[2], names[3]);
+            wall_keys = [];
+            for(visit = puzzle_rng_first_visit(); visit <= puzzle_rng_visit_count(); visit++)
+            {
+                page = add_submenu(walls, "chamber_visit_" + visit, puzzle_rng_visit_row(visit) + puzzle_rng_visit_text(visit), puzzle_rng_visit_title(visit));
+                    add_cfg_choice(page, "Clear staff", "chamber_v" + visit + "_a", choices);
+                    add_cfg_choice(page, "Clear staff", "chamber_v" + visit + "_b", choices);
+                wall_keys[wall_keys.size] = "chamber_v" + visit + "_a";
+                wall_keys[wall_keys.size] = "chamber_v" + visit + "_b";
+            }
+            create_option(walls, "All random", ::puzzle_rng_set_keys, wall_keys, 0);
     }
 }
 

@@ -311,22 +311,20 @@ endingprac_get_next_powerup() // OVERRIDE: maps\mp\zombies\_zm_powerups::get_nex
 ##############################################################################*/
 endingprac_build_menu(root)
 {
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
         add_cfg_choice(settings, "Start Location", "ending_spawn", array("Gen 5", "Robot head", "Exit", "staff kills", "crazy place leave"));
         self shared_start_time_menu(settings);
-        if(level.segment.use_exit || get_cfg_int("ending_spawn") == ENDING_SPAWN_STAFF_KILLS) add_cfg_choice(settings, "Exit", "ending_exit", array("Lightning", "Wind"));
+        if(level.segment.use_exit || get_cfg_int("ending_spawn") == ENDING_SPAWN_STAFF_KILLS) add_cfg_choice(settings, "Exit Portal", "ending_exit", array("Lightning", "Wind"));
         create_option(settings, "Round: ^3" + get_cfg_int("ending_round"), ::cfg_increment_int, "ending_round", array(15, 16));
         shared_add_round_zombies_option(settings, "ending_round", "ending_zombies");
-        shared_add_stg_choice(settings);
-        self shared_boomhilda_menu(settings);
         // Exit and the Crazy Place locations always have it at that exit's portal (Lightning or Wind).
         if(get_cfg_int("ending_spawn") != ENDING_SPAWN_EXIT && !endingprac_in_chamber()) add_cfg_choice(settings, "Gramophone", "ending_gram", array("in hand", "Wind portal"));
-        add_cfg_toggle(settings, "Maxis Drone", "maxis_drone_crafted", "^2crafted", "^3not crafted");
-        create_option(settings, "Rain foot: ^3" + rain_foot_text(), ::cfg_increment_int, "rain_foot", array(FOOT_RANDOM, FOOT_RIGHT));
 
-    self shared_build_panzer_menu(root);
-    self shared_build_templar_menu(root);
-    self shared_build_robot_menus(root, ::shared_segment_all_random_cycles, shared_robot_earliest_cycle(), false);
+    self shared_build_categories(root);
+    shared_add_stg_choice("loadout");
+    self shared_boomhilda_menu("loadout");
+    add_cfg_toggle("loadout", "Maxis Drone", "maxis_drone_crafted", "^2crafted", "^3not crafted");
+    self shared_build_ai_menus(false);
 }
 
 endingprac_default_cfg()

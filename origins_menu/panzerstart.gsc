@@ -65,6 +65,7 @@ panzerstart_segment()
     segment = shared_segment();
     segment.split = SPLIT_ICE;
     segment.round = PANZERSTART_ROUND;
+    segment.panzer_health_hud = true;
     segment.gems = [];
     segment.excluded_doors = undefined; // Every door open, as Panzer Practice.
     segment.generators = undefined;     // None captured.
@@ -377,18 +378,18 @@ panzerstart_build_menu(root)
     spawn = panzerstart_box_index("spawn_box");
     last = boxes.size - 1;
 
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
         self shared_start_time_menu(settings);
         create_option(settings, "Start box: ^3" + boxes[start].label, ::cfg_increment_int, "start_box", array(0, last));
         create_option(settings, "Spawn box: ^3" + boxes[spawn].label, ::cfg_increment_int, "spawn_box", array(0, last));
         // The start box is always full, so it has no souls row.
         for(i = 0; i < boxes.size; i++)
             if(i != start) create_option(settings, boxes[i].label + " box: " + panzerstart_souls_text(boxes[i].key), ::cfg_increment_int, boxes[i].key, array(0, PANZERSTART_BOX_SOULS));
-        add_cfg_toggle(settings, "Early Gram", "early_gram", "^2yes", "^1no");
-        add_cfg_toggle(settings, "Claymore", "clay");
-        add_cfg_toggle(settings, "Hud Info", "hud");
+        add_cfg_toggle(settings, "Gram", "early_gram", "^2in hand", "^3placed");
 
-    self shared_build_segment_menus(root);
+    self shared_build_categories(root);
+    add_cfg_toggle("loadout", "Claymore", "clay");
+    self shared_build_segment_menus();
 }
 
 panzerstart_default_cfg()

@@ -4,6 +4,7 @@
 
 #include scripts\zm\utility_core\menu_base;
 #include scripts\zm\utility_core\menu_utility;
+#include scripts\zm\origins_menu\origins;
 #include scripts\zm\origins_menu\segmentutil;
 #include scripts\zm\origins_menu\staffutil;
 #include scripts\zm\origins_menu\puzzlerng;
@@ -84,20 +85,19 @@ prelightning_setup()
 
 prelightning_build_menu(root)
 {
-    settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
+    settings = add_submenu(root, "mapsettings", level.mode.label + " Start", level.mode.label);
         shared_add_location_choice(settings, "lightning_spawn", array(PRELIGHTNING_LOC_CRAFT, PRELIGHTNING_LOC_STG, PRELIGHTNING_LOC_EXIT), array("Craft", "STG", "Exit"));
         self shared_start_time_menu(settings);
-        add_cfg_toggle(settings, "Trio skip", "trioskip", "^2Yes", "^1No");
-        shared_add_stg_choice(settings);
-        self shared_boomhilda_menu(settings);
-        // Disc Turn is for the Craft start: Exit keeps the normal scramble, STG
-        // leaves the dials as scrambled.
-        if(get_cfg_int("lightning_spawn") == PRELIGHTNING_LOC_CRAFT) shared_add_disc_turn_choice(settings);
-        if(get_cfg_int("lightning_spawn") != PRELIGHTNING_LOC_STG) add_cfg_toggle(settings, "Skip First Disc", "skip_first_disc", "^2Yes", "^1No");
         create_option(settings, "Zombies left: ^3" + shared_zombies_left_text("lightning_zombies"), ::cfg_increment_int, "lightning_zombies", array(0, 24));
 
-    self shared_build_items_menu(root);
-    self shared_build_segment_menus(root);
+    self shared_build_categories(root);
+    shared_add_stg_choice("loadout");
+    self shared_boomhilda_menu("loadout");
+    self shared_add_item_rows("loadout");
+    add_cfg_toggle("special_ai", "Trio skip", "trioskip");
+    // Disc Turn is for the Craft start: Exit keeps the normal scramble, STG
+    // leaves the dials as scrambled.
+    self shared_build_segment_menus(get_cfg_int("lightning_spawn") == PRELIGHTNING_LOC_CRAFT, get_cfg_int("lightning_spawn") != PRELIGHTNING_LOC_STG);
 }
 
 prelightning_default_cfg()
