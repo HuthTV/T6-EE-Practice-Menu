@@ -12,10 +12,11 @@
 /*##############################################################################
                               Avogadro (Maxis side)
 ##############################################################################*/
-// Values of the "avogadro_return" setting.
-#define AVO_RETURN_VANILLA  0     // 2 to 4 rounds, next round after an idle exit
-#define AVO_RETURN_NEXT     1     // The round after it left
-#define AVO_RETURN_NOW      2     // At once, in the storm's region
+// Highest round the Avogadro Round row reaches.
+#define AVO_LAST_ROUND  30
+
+// "storm_spot" is 1 + an index into the regions of cloud_update_fx, 0 is random.
+#define STORM_CORNFIELD 4
 
 /*##############################################################################
                               Timescale used while a mode sets up

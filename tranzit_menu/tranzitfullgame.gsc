@@ -5,6 +5,8 @@
 #include scripts\zm\utility_core\basegame;
 #include scripts\zm\utility_core\menu_base;
 #include scripts\zm\utility_core\menu_utility;
+#include scripts\zm\utility_core\splits;
+#include scripts\zm\utility_core\victis;
 #include scripts\zm\tranzit_menu\tranzitutil;
 #inline scripts\zm\tranzit_menu\tranzit;
 
@@ -12,43 +14,79 @@
                               TranZit Fullgame
 ##############################################################################*/
 // A normal game from round 1 with the run's RNG set: the first two box hits,
-// 3% drops, the Max Ammo on the first kill of the ending, where each Denizen
-// teleport goes, where the jet gun parts spawn, and the Avogadro's storm and
-// return for the Maxis side.
+// 3% drops, the EMPs Max Ammo, where each Denizen teleport goes, where the jet gun
+// parts spawn, and the Avogadro's storm and round for the Maxis side.
 
 tranzitfullgame_initialize()
 {
     replacefunc(maps\mp\zombies\_zm_buildables::generate_zombie_buildable_piece, ::tranzitfullgame_generate_zombie_buildable_piece);
-    replacefunc(maps\mp\zm_transit_ai_screecher::teleport_player, ::tranzitfullgame_teleport_player);
     replacefunc(maps\mp\zombies\_zm_ai_avogadro::avogadro_exit, ::tranzitfullgame_avogadro_exit);
     replacefunc(maps\mp\zombies\_zm_ai_avogadro::cloud_update_fx, ::tranzitfullgame_cloud_update_fx);
     tranzit_drops_install();
-    level.tranzitfullgame_teleports = 0;
+    victis_box_install(::tranzitfullgame_box_gun_due);
+    tranzit_teleports_install(DENIZEN_TELEPORTS);
     mode_cfg_load("tranzitfullgame", tranzitfullgame_default_cfg());
 }
 
 tranzitfullgame_run()
 {
-    level.tranzitfullgame_box_hits = 0;
+    // zm_transit main sets its own box check, so this goes after it.
     level.customrandomweaponweights = ::tranzitfullgame_box_hit_weights;
-    level thread tranzitfullgame_ending_max();
+    level.tranzitfullgame_box_check = level.special_weapon_magicbox_check;
+    level.special_weapon_magicbox_check = ::tranzitfullgame_special_box_check;
+    victis_max_hold();
+    level thread tranzitfullgame_emps_max();
 
     flag_wait("initial_blackscreen_passed");
     flag_set("menu_active");
+    level thread tranzitfullgame_splits();
+}
+
+// The B2EE timer's TranZit splits (wait_for_split, handle_tranzit_branch). The first
+// ends the power event, then names the side: the jet gun built means Richtofen, the
+// power event starting again (the power going off) means Maxis.
+tranzitfullgame_splits()
+{
+    level endon("end_game");
+    practice_splits_start(array("^3Jetgun/Power off ^7"), 0);
+
+    level waittill("power_event_complete");
+    while(true)
+    {
+        if(level.sq_progress["rich"]["A_jetgun_built"] > 0)
+        {
+            level.split_labels = array("^3Jetgun ^7", "^3Tower ^7", "^3Lights ^7");
+            practice_split(0);
+            while(level.sq_progress["rich"]["A_jetgun_tower"] == 0) wait 0.05;
+            practice_split(1);
+            while(level.sq_progress["rich"]["FINISHED"] == 0) wait 0.05;
+            practice_split(2);
+            return;
+        }
+        if(is_true(level.power_event_in_progress))
+        {
+            level.split_labels = array("^3Power off ^7", "^3Turbines ^7");
+            practice_split(0);
+            while(level.sq_progress["maxis"]["FINISHED"] == 0) wait 0.05;
+            practice_split(1);
+            return;
+        }
+        wait 0.05;
+    }
 }
 
 tranzitfullgame_default_cfg()
 {
     settings_ar = [];
     settings_ar = tranzit_drop_defaults(settings_ar);
-    settings_ar["box_hit_1"] = 0;
-    settings_ar["box_hit_2"] = 0;
-    for(i = 1; i <= DENIZEN_TELEPORTS; i++)
-        settings_ar["teleport_" + i] = 0;
+    // EMPs, then the Mark II (user, 2026-11-05). New keys, so these reach saved cfgs.
+    settings_ar["box_gun_1"] = 2;
+    settings_ar["box_gun_2"] = 25;
+    settings_ar = tranzit_teleport_defaults(settings_ar);
     foreach(part in tranzitfullgame_jetgun_parts())
         settings_ar[part.key] = 0;
-    settings_ar["storm_region"] = 0;
-    settings_ar["avogadro_return"] = AVO_RETURN_VANILLA;
+    settings_ar["storm_spot"] = STORM_CORNFIELD;
+    settings_ar["avogadro_round"] = 0;
     return settings_ar;
 }
 
@@ -59,21 +97,21 @@ tranzitfullgame_build_menu(root)
 
         box = add_submenu(settings, "box", "Mystery Box", "Box");
             box_guns = tranzitfullgame_box_hit_options();
-            add_cfg_choice(box, "Hit 1", "box_hit_1", box_guns.labels);
-            add_cfg_choice(box, "Hit 2", "box_hit_2", box_guns.labels);
+            add_cfg_choice(box, "Hit 1", "box_gun_1", box_guns.labels);
+            add_cfg_choice(box, "Hit 2", "box_gun_2", box_guns.labels);
 
         teleports = add_submenu(settings, "teleports", "Denizen Teleports", "Teleports");
-            lights = combinearrays(array("random"), tranzit_light_labels());
-            for(i = 1; i <= DENIZEN_TELEPORTS; i++)
-                add_cfg_choice(teleports, "Teleport " + i, "teleport_" + i, lights);
+            tranzit_teleport_menu(teleports);
 
         parts = add_submenu(settings, "jetgun", "Jetgun Parts", "Jetgun");
             foreach(part in tranzitfullgame_jetgun_parts())
                 add_cfg_choice(parts, part.label, part.key, tranzitfullgame_jetgun_labels(part));
 
         maxis = add_submenu(settings, "maxis", "Maxis Side", "Maxis");
-            add_cfg_choice(maxis, "Storm", "storm_region", array("random", "bus depot", "diner", "farm", "cornfield", "power station", "town"));
-            add_cfg_choice(maxis, "Avogadro", "avogadro_return", array("vanilla", "next round", "at once"));
+            add_cfg_choice(maxis, "Storm", "storm_spot", array("random", "bus depot", "diner", "farm", "cornfield", "power station", "town"));
+            round = "random";
+            if(get_cfg_int("avogadro_round")) round = "" + get_cfg_int("avogadro_round");
+            create_option(maxis, "Avogadro Round: ^3" + round, ::cfg_increment_int, "avogadro_round", array(0, AVO_LAST_ROUND));
 }
 
 /*##############################################################################
@@ -112,6 +150,7 @@ tranzitfullgame_box_hit_options()
     tranzitfullgame_add_box_hit_option(options, "fiveseven_zm", "Five-seven");
     tranzitfullgame_add_box_hit_option(options, "fivesevendw_zm", "Five-seven DW");
     tranzitfullgame_add_box_hit_option(options, "knife_ballistic_zm", "Ballistic Knife");
+    tranzitfullgame_add_box_hit_option(options, "raygun_mark2_zm", "Ray Gun Mark II");
     return options;
 }
 
@@ -121,91 +160,52 @@ tranzitfullgame_add_box_hit_option(options, weapon, label)
     options.labels[options.labels.size] = label;
 }
 
-// As O-Prac's Hit 1/Hit 2: vanilla treasure_chest_chooseweightedrandomweapon
-// calls this once per box hit with the shuffled weapon list and gives the first
-// weapon in it the player can receive. On the first two hits the chosen gun goes
-// to the front. If the player cannot receive it (owned, limit reached), the box
-// picks randomly as usual.
+// The gun set for this hit of the first box, or undefined.
+tranzitfullgame_box_gun_due()
+{
+    hit = victis_box_hit();
+    if(hit < 1 || hit > 2) return undefined;
+
+    choice = get_cfg_int("box_gun_" + hit);
+    options = tranzitfullgame_box_hit_options();
+    if(choice <= 0 || choice >= options.weapons.size) return undefined;
+    return options.weapons[choice];
+}
+
+// As O-Prac's Hit 1/Hit 2: vanilla treasure_chest_chooseweightedrandomweapon gives
+// the first weapon in this list the player can receive, so the gun due goes to the
+// front. If the player cannot receive it (owned, limit reached), the box picks
+// randomly as usual.
 tranzitfullgame_box_hit_weights(keys)
 {
-    level.tranzitfullgame_box_hits++;
-    if(level.tranzitfullgame_box_hits > 2) return keys;
-
-    choice = get_cfg_int("box_hit_" + level.tranzitfullgame_box_hits);
-    options = tranzitfullgame_box_hit_options();
-    if(choice <= 0 || choice >= options.weapons.size) return keys;
+    gun = tranzitfullgame_box_gun_due();
+    if(!isdefined(gun)) return keys;
 
     forced = [];
-    forced[0] = options.weapons[choice];
+    forced[0] = gun;
     foreach(key in keys) forced[forced.size] = key;
     return forced;
 }
 
-/*##############################################################################
-                              Ending Max Ammo
-##############################################################################*/
-// The ending starts when the Richtofen tower kills are done (vanilla notify of
-// richtofen_sidequest_b), right before the EMP lights.
-tranzitfullgame_ending_max()
+// Vanilla transit_special_weapon_magicbox_check refuses the Mark II 2 times in 3, so
+// the gun due skips it.
+tranzitfullgame_special_box_check(weapon)
 {
-    level waittill("sq_stage_3complete");
-    tranzit_arm_ending_max();
+    gun = tranzitfullgame_box_gun_due();
+    if(isdefined(gun) && gun == weapon) return true;
+    if(isdefined(level.tranzitfullgame_box_check)) return self [[ level.tranzitfullgame_box_check ]](weapon);
+    return true;
 }
 
 /*##############################################################################
-                              Denizen teleports
+                              EMPs Max Ammo
 ##############################################################################*/
-// OVERRIDE: maps\mp\zm_transit_ai_screecher::teleport_player
-// self is the light whose hole the player jumped in.
-tranzitfullgame_teleport_player( player )
+// The ending starts when the Richtofen tower kills are done (vanilla notify of
+// richtofen_sidequest_b), right before the EMP lights.
+tranzitfullgame_emps_max()
 {
-    lights = getstructarray( "screecher_escape", "targetname" );
-    lights = array_randomize( lights );
-    dest_light = undefined;
-
-    //MODIFIED: the Denizen Teleports setting picks this teleport's light. One
-    // that is the light the player left, or has another player close, is not
-    // valid, and the teleport goes to a random light as vanilla.
-    level.tranzitfullgame_teleports++;
-    n = level.tranzitfullgame_teleports;
-    if ( n <= DENIZEN_TELEPORTS )
-    {
-        forced = tranzit_light_setting( get_cfg_int( "teleport_" + n ) );
-
-        if ( isdefined( forced ) )
-        {
-            if ( forced != self && !forced maps\mp\zm_transit_ai_screecher::other_players_close_to_light( player ) )
-                dest_light = forced;
-            else
-                iprintln( "T-Prac: teleport " + n + " to " + forced.script_noteworthy + " not valid, using random" );
-        }
-    }
-
-    if ( !isdefined( dest_light ) )
-    {
-    //MODIFIED END
-        foreach ( light in lights )
-        {
-            if ( light == self )
-                continue;
-
-            if ( light maps\mp\zm_transit_ai_screecher::other_players_close_to_light( player ) )
-                continue;
-
-            dest_light = light;
-            break;
-        }
-    }
-
-    if ( isdefined( dest_light ) )
-    {
-        playsoundatposition( "zmb_screecher_portal_arrive", dest_light.origin );
-        player maps\mp\zombies\_zm_gump::player_teleport_blackscreen_on();
-        player setorigin( dest_light.origin );
-        player notify( "used_screecher_hole" );
-        player maps\mp\zombies\_zm_stats::increment_client_stat( "screecher_teleporters_used", 0 );
-        player maps\mp\zombies\_zm_stats::increment_player_stat( "screecher_teleporters_used" );
-    }
+    level waittill("sq_stage_3complete");
+    tranzit_release_emps_max();
 }
 
 /*##############################################################################
@@ -327,8 +327,9 @@ tranzitfullgame_generate_zombie_buildable_piece( buildablename, modelname, radiu
 ##############################################################################*/
 // The Avogadro waits in a storm cloud between its visits. "Storm" keeps the
 // cloud over one region (vanilla moves it every 30 s, starting at the power
-// station), "Avogadro return" brings it back sooner (vanilla: 2 to 4 rounds, the
-// next round when it left because nobody came).
+// station). It leaves the power station when a player looks at it with the power on
+// and comes back 2 to 4 rounds after each exit, the next round when it left because
+// nobody came. "Avogadro Round" sets the round of the first return it has not passed.
 
 // OVERRIDE: maps\mp\zombies\_zm_ai_avogadro::avogadro_exit
 tranzitfullgame_avogadro_exit( from )
@@ -394,12 +395,14 @@ tranzitfullgame_avogadro_exit( from )
     else
         self.return_round = level.round_number + randomintrange( 2, 5 );
 
-    //MODIFIED: Avogadro return setting. cloud_update brings it back once the
-    // round number reaches return_round.
-    switch ( get_cfg_int( "avogadro_return" ) )
+    //MODIFIED: Avogadro Round setting, once. cloud_update brings it back when the
+    // round number reaches return_round. Later exits are vanilla.
+    forced_round = get_cfg_int( "avogadro_round" );
+
+    if ( forced_round >= level.round_number && !is_true( level.tranzitfullgame_avogadro_forced ) )
     {
-        case AVO_RETURN_NEXT: self.return_round = level.round_number + 1; break;
-        case AVO_RETURN_NOW:  self.return_round = level.round_number; break;
+        level.tranzitfullgame_avogadro_forced = 1;
+        self.return_round = forced_round;
     }
     //MODIFIED END
 
@@ -447,7 +450,7 @@ tranzitfullgame_cloud_update_fx()
                 region_str = region[4];
 
             //MODIFIED: Storm setting (1 + region index, 0 is vanilla).
-            storm = get_cfg_int( "storm_region" );
+            storm = get_cfg_int( "storm_spot" );
             if ( storm >= 1 && storm <= region.size )
                 region_str = region[storm - 1];
             //MODIFIED END

@@ -14,16 +14,65 @@
 // Everything TranZit adds to the core menus and HUD (see practice_map in
 // utility_core\basegame.gsc): the Victis Settings (utility_core\victis.gsc) with
 // TranZit's madeup scripts. Settings are saved in T_PRAC/. Modes: Fullgame
-// (tranzitfullgame.gsc), Ending EMP (endingemp.gsc), Freeroam.
+// (tranzitfullgame.gsc), Ending EMP (endingemp.gsc).
 tranzit_practice_map()
 {
     map = practice_map("Huth's T-Prac", "Huth's TranZit Practice Tool", "T_PRAC/", "t_menu_gamemode");
     map.cursor_color = (0.62, 0.82, 0.52);
-    map.header_text_color = (0, 0, 0);
-    map.accent_color = (0.47, 0.6, 0.39); // Washed-out plastic battle green (user, 2026-11-04)
+    map.accent_color = (0.2, 0.32, 0.16); // Dark battle green, white header text (user, 2026-11-05)
+    map.menu_icon = "hud_empgrenade";     // The EMP grenade (user, 2026-11-06).
+    // The modes draw their own splits, which branch by side: the Timer menu is on or
+    // off only (user, 2026-11-06).
+    map.split_names = array("lights");
+    map.split_labels = array("Lights");
+    map.fixed_splits = true;
     // RPG PaP: the B2EE timer's TranZit fridge.
     victis_practice_map(map, "usrpg_upgraded_zm", ::tranzit_madeup_install);
+    map.base_cfg_defaults = ::tranzit_base_cfg_defaults;
+    map.build_cheats = ::tranzit_build_cheats;
+    map.say_command = ::tranzit_say_command;
+    map.say_help = "^7, ^3fog";
+    map.run = ::tranzit_run;
     return map;
+}
+
+tranzit_base_cfg_defaults(settings_ar)
+{
+    settings_ar = victis_base_cfg_defaults(settings_ar);
+    settings_ar["fog"] = 1;
+    return settings_ar;
+}
+
+tranzit_build_cheats(menu)
+{
+    create_option(menu, "Fog: " + cfgint_compare("fog"), ::tranzit_toggle_fog);
+}
+
+tranzit_say_command(message)
+{
+    if(message == "fog") self tranzit_toggle_fog();
+}
+
+tranzit_run()
+{
+    tranzit_apply_fog();
+}
+
+/*##############################################################################
+                              Fog
+##############################################################################*/
+// The look only (user, 2026-11-06): r_fog draws the map's fog, Denizens and the
+// player's "in fog" state stay as vanilla. On LAN the script runs on the client's
+// own dvars, as timescale does.
+tranzit_toggle_fog()
+{
+    self cfg_toggle_binary("fog");
+    tranzit_apply_fog();
+}
+
+tranzit_apply_fog()
+{
+    setdvar("r_fog", get_cfg_int("fog"));
 }
 
 // The menu runs on classic TranZit only: zm_transit also hosts Bus Depot, Town,
