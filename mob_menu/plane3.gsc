@@ -53,7 +53,7 @@ plane3_build_menu(root)
 plane3_default_cfg()
 {
     settings_ar = [];
-    settings_ar = mob_plane_default_cfg(settings_ar, PLANE3_ROUND, START_ZOMBIES_FULL);
+    settings_ar = mob_plane_default_cfg(settings_ar, PLANE3_ROUND, START_ZOMBIES_RANDOM);
     settings_ar["tomahawk"] = 1;
     settings_ar["perk_jugg"] = 1;
     return settings_ar;

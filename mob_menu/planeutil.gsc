@@ -25,8 +25,8 @@
 // Each mode passes its own data in a struct from mob_plane_segment():
 //   cycles         plane trips already done: 0, 1 or 2
 //   start_round    round the segment starts on
-//   start_zombies  zombies in the start round: 1 to 4, START_ZOMBIES_RANDOM
-//                  (1 to 4 at random) or START_ZOMBIES_FULL (the whole round)
+//   start_zombies  zombies in the start round: 1 to 6 or START_ZOMBIES_RANDOM
+//                  (1 to 6 at random), never the whole round (user, 2026-11-05)
 //   docks_souls    souls in the docks soul catcher; 0 picks 4 to 6
 //   all_wolves     fill every soul catcher instead
 //   prebuilt       Plane I: build the plane, so the player only boards it
@@ -34,7 +34,10 @@
 //   perks          perk specialties to give
 //   split          MOB_SPLIT_PLANE_n: the split boarding this plane records; it
 //                  starts the run clock at the mode's start time ("Plane Time")
+//                  or undefined for a mode with no timer
 //   on_start       optional mode function, run with self = player at the start
+//   spot           where the player starts, undefined for the roof
+//   on_setup       optional mode function, run with self = player once placed
 
 // Old M-Practice Plane 1 doors (zombie_door trigger origins).
 #define DOOR_SPAWN_M14    (2105, 10581, 1374)
@@ -46,9 +49,6 @@
 #define DOOR_MP5_CATWALK  (1601, 9223, 1482)
 #define DOOR_CITADEL      (416, 9438, 1146)
 #define DOOR_DOCKS_WOLF   (136, 6322, 102)
-
-// Where the segment starts: on the roof, by the plane.
-#define ROOF_SPOT  (3646.64, 9863.25, 1712.13)
 
 mob_plane_segment()
 {
@@ -106,7 +106,7 @@ mob_plane_settings_menu(settings, min_round, max_round)
 {
     practice_start_time_menu(settings);
     create_option(settings, "Round: ^3" + get_cfg_int("start_round"), ::cfg_increment_int, "start_round", array(min_round, max_round));
-    create_option(settings, "Zombies Left: ^3" + mob_start_zombies_text(), ::cfg_increment_int, "start_zombies", array(START_ZOMBIES_RANDOM, START_ZOMBIES_FULL));
+    create_option(settings, "Zombies Left: ^3" + mob_start_zombies_text(), ::cfg_increment_int, "start_zombies", array(START_ZOMBIES_RANDOM, START_ZOMBIES_MAX));
     perks = add_submenu(settings, "perks", "Perks");
         add_cfg_toggle(perks, "Juggernog", "perk_jugg");
         add_cfg_toggle(perks, "Double Tap", "perk_dt");
@@ -117,12 +117,8 @@ mob_plane_settings_menu(settings, min_round, max_round)
 
 mob_start_zombies_text()
 {
-    switch(get_cfg_int("start_zombies"))
-    {
-        case START_ZOMBIES_RANDOM: return "random 1-4";
-        case START_ZOMBIES_FULL:   return "full round";
-        default:                   return get_cfg_int("start_zombies");
-    }
+    if(get_cfg_int("start_zombies") == START_ZOMBIES_RANDOM) return "random 1-" + START_ZOMBIES_MAX;
+    return get_cfg_int("start_zombies");
 }
 
 // The mode's run(), from init (before round 1 begins): starts the round skip,
@@ -133,7 +129,8 @@ mob_run_plane_segment(segment)
     // too) until the start round begins (mob_plane_setup).
     setdvar("timescale", SETUP_TIMESCALE);
     level thread mob_plane_round(segment);
-    level thread mob_split_timer(segment.split, ::practice_start_time_start_clock);
+    if(isdefined(segment.split))
+        level thread mob_split_timer(segment.split, ::practice_start_time_start_clock);
     flag_wait("initial_blackscreen_passed");
     flag_set("menu_active");
     player = get_players()[0];
@@ -145,12 +142,8 @@ mob_run_plane_segment(segment)
 // plane rounds need no Brutus catch-up.
 mob_plane_round(segment)
 {
-    switch(segment.start_zombies)
-    {
-        case START_ZOMBIES_RANDOM: zombies = randomintrange(1, 5); break;
-        case START_ZOMBIES_FULL:   zombies = undefined; break;
-        default:                   zombies = segment.start_zombies; break;
-    }
+    zombies = segment.start_zombies;
+    if(zombies == START_ZOMBIES_RANDOM) zombies = randomintrange(1, START_ZOMBIES_MAX + 1);
     practice_set_round(segment.start_round, zombies);
 }
 
@@ -198,7 +191,10 @@ mob_plane_setup(segment)
         self mob_build_plane_ready();
     if(segment.tomahawk)
         self mob_give_tomahawk();
-    self setorigin(ROOF_SPOT);
+    spot = ROOF_SPOT;
+    if(isdefined(segment.spot)) spot = segment.spot;
+    self setorigin(spot);
+    if(isdefined(segment.on_setup)) self [[ segment.on_setup ]]();
 
     while(level.round_number < segment.start_round)
         level waittill("start_of_round");
@@ -209,7 +205,6 @@ mob_plane_setup(segment)
     flag_set("plane_released"); // Phased checks start (mob_plane_install).
     if(isdefined(segment.on_start)) self [[ segment.on_start ]]();
     if(!was_demigod) self toggle_demigod();
-    iprintlnbold("^3Segment started");
 }
 
 // Plane 1's route: the roof catcher full and the docks one part way; later

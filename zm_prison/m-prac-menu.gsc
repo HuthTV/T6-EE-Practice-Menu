@@ -10,6 +10,7 @@
 #include scripts\zm\mob_menu\plane1;
 #include scripts\zm\mob_menu\plane2;
 #include scripts\zm\mob_menu\plane3;
+#include scripts\zm\mob_menu\wardensnade;
 #inline scripts\zm\mob_menu\mob;
 
 /*##############################################################################
@@ -23,7 +24,8 @@ register_modes()
 	mode_timer(register_mode("plane1",      "Plane I",   ::plane1_initialize,      ::plane1_run,      ::plane1_build_menu), false, MOB_SPLIT_PLANE_1);
 	mode_timer(register_mode("plane2",      "Plane II",  ::plane2_initialize,      ::plane2_run,      ::plane2_build_menu), false, MOB_SPLIT_PLANE_2);
 	mode_timer(register_mode("plane3",      "Plane III", ::plane3_initialize,      ::plane3_run,      ::plane3_build_menu), false, MOB_SPLIT_PLANE_3);
-	register_mode("freeroam",    "Freeroam",  ::freeroam_initialize,    ::freeroam_run,    ::freeroam_build_menu);
+	register_mode("wardensnade", "Warden's Nade", ::wardensnade_initialize, ::wardensnade_run, ::wardensnade_build_menu);
+	register_mode("freeroam",    "Freeroam",  ::freeroam_initialize,    ::freeroam_run);
 }
 
 main()

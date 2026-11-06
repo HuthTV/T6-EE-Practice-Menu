@@ -11,7 +11,7 @@
 /*##############################################################################
                               Plane 1
 ##############################################################################*/
-// The old M-Practice Plane 1 segment: round 3 with 1 to 4 zombies, the route
+// The old M-Practice Plane 1 segment: round 3 with 1 to 6 zombies, the route
 // done up to the first plane and every plane part in hand, with the drop cycle
 // and points the old tool set.
 

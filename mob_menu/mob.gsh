@@ -18,6 +18,12 @@
 #define WOLF_SOULS   6      // Souls that fill a catcher.
 
 /*##############################################################################
+                              Roof, by the plane
+##############################################################################*/
+// Where the plane segments start and what Best Roof Spawn measures from.
+#define ROOF_SPOT  (3646.64, 9863.25, 1712.13)
+
+/*##############################################################################
                               Timescale used while a segment sets up
 ##############################################################################*/
 #define SETUP_TIMESCALE  10
@@ -38,6 +44,6 @@
 /*##############################################################################
                               Plane segment start round zombies
 ##############################################################################*/
-// Values of the "start_zombies" setting; 1 to 4 mean that many.
-#define START_ZOMBIES_RANDOM  0     // 1 to 4 at random, as the old Plane 1
-#define START_ZOMBIES_FULL    5     // The round's normal count
+// Values of the "start_zombies" setting, 1 to START_ZOMBIES_MAX mean that many.
+#define START_ZOMBIES_RANDOM  0     // 1 to START_ZOMBIES_MAX at random
+#define START_ZOMBIES_MAX     6

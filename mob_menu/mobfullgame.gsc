@@ -34,7 +34,7 @@ mobfullgame_run()
 {
     flag_wait("initial_blackscreen_passed");
     level thread mobfullgame_start_box_location();
-    if(get_cfg_int("mk2_box")) mobfullgame_mk2_box();
+    if(get_cfg_int("box_mk2_only")) mobfullgame_mk2_box();
     if(get_cfg_int("second_drop_nuke")) level thread mobfullgame_second_drop_nuke();
     level thread mob_split_timer(MOB_SPLIT_DRYER);
     flag_set("menu_active");
@@ -44,26 +44,27 @@ mobfullgame_build_menu(root)
 {
     settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
         add_cfg_choice(settings, "Key Location", "key_location", array("random", "east (cafe)", "west"));
-        add_cfg_toggle(settings, "Door Spawn", "door_spawn");
+        add_cfg_choice(settings, "Door Spawn", "door_spawn_spot", array("random", "1", "2", "3", "4"));
         add_cfg_toggle(settings, "Second Drop Nuke", "second_drop_nuke");
         add_cfg_toggle(settings, "3% Drops Round 1", "round1_percent_drops");
         add_cfg_toggle(settings, "3% Drops", "percent_drops");
     box = add_submenu(settings, "box", "Box");
-        add_cfg_choice(box, "Location", "box_location", array("random", "cafe", "warden"));
-        add_cfg_toggle(box, "MK2 Only", "mk2_box");
+        add_cfg_choice(box, "Location", "box_start", array("random", "cafe", "warden"));
+        add_cfg_toggle(box, "MK2 Only", "box_mk2_only");
 }
 
-// Defaults are the old M-Practice dvar defaults.
+// Defaults are the old M-Practice dvar defaults, but for the box (user, 2026-11-05:
+// new keys, so these reach saved cfgs).
 mobfullgame_default_cfg()
 {
     settings_ar = [];
     settings_ar["key_location"] = KEY_EAST;
-    settings_ar["door_spawn"] = 1;
+    settings_ar["door_spawn_spot"] = 0;
     settings_ar["second_drop_nuke"] = 1;
     settings_ar["round1_percent_drops"] = 0;
     settings_ar["percent_drops"] = 1;
-    settings_ar["box_location"] = BOX_RANDOM;
-    settings_ar["mk2_box"] = 0;
+    settings_ar["box_start"] = BOX_CAFE;
+    settings_ar["box_mk2_only"] = 1;
     return settings_ar;
 }
 
@@ -91,7 +92,7 @@ mobfullgame_mk2_box()
 // Moves the starting box to the chosen chest.
 mobfullgame_start_box_location()
 {
-    switch(get_cfg_int("box_location"))
+    switch(get_cfg_int("box_start"))
     {
         case BOX_CAFE:   start_chest = "cafe_chest";  break;
         case BOX_WARDEN: start_chest = "start_chest"; break;
@@ -222,14 +223,23 @@ mobfullgame_getfreespawnpoint( spawnpoints, player )
         return undefined;
     }
 
-    //MODIFIED: Door spawn: solo starts at one of the spawn points by the cell
-    // doors (indexes from the old M-Practice).
-    if ( get_cfg_int( "door_spawn" ) && is_true( level.is_forever_solo_game ) )
+    //MODIFIED: Door spawn: solo always starts at a spawn point by the cell doors
+    // (indexes from the old M-Practice), the chosen one or a random one.
+    if ( is_true( level.is_forever_solo_game ) )
     {
         door_spawns = array( 3, 4, 6, 7 );
-        index = door_spawns[randomint( door_spawns.size )];
+        door = get_cfg_int( "door_spawn_spot" ) - 1;
+
+        if ( door < 0 || door >= door_spawns.size )
+            door = randomint( door_spawns.size );
+
+        index = door_spawns[door];
+
         if ( index < spawnpoints.size )
+        {
+            println( "M-Prac: door spawn " + ( door + 1 ) + " at " + spawnpoints[index].origin );
             return spawnpoints[index];
+        }
     }
     //MODIFIED END
 

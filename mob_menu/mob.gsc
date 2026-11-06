@@ -22,12 +22,16 @@ mob_practice_map()
     map.split_names = array("dryer", "gondola_1", "plane_1", "gondola_2", "plane_2", "gondola_3", "plane_3", "codes", "headphones");
     map.split_labels = array("Dryer", "Gondola I", "Plane I", "Gondola II", "Plane II", "Gondola III", "Plane III", "Codes", "Headphones");
     map.accent_color = (1, 0.5, 0.25);
+    map.menu_icon = "faction_prison";     // Scoreboard emblem. faction_inmates is only in the Grief zone, not classic.
     map.cursor_color = (1, 0.62, 0.36);
     map.header_text_color = (0, 0, 0);
     map.initialize = ::mob_initialize;
     map.build_hud = ::mob_build_hud;
     map.build_cheats = ::mob_build_cheats;
+    map.build_map_menu = ::mob_build_root_menus;
     map.base_cfg_defaults = ::mob_base_cfg_defaults;
+    map.character_names = array("Finn", "Sal", "Billy", "Arlington");
+    map.character_chosen = ::mob_character_chosen;
     map.say_command = ::mob_say_command;
     map.open_doors = ::mob_open_doors;
     map.run = ::mob_run;
@@ -53,6 +57,12 @@ mob_initialize()
     replacefunc(maps\mp\zm_alcatraz_sq::dryer_trigger_thread, ::mob_dryer_trigger_thread);
     mob_teleports_init();
     level thread mob_track_afterlife_spawns();
+}
+
+// As vanilla's assign_lowest_unused_character_index.
+mob_character_chosen(index)
+{
+    if(index == 3) level.has_weasel = 1;
 }
 
 mob_base_cfg_defaults(settings_ar)
@@ -90,20 +100,24 @@ mob_build_cheats(cheats)
 	create_option(cheats, "Give Plane Parts", ::mob_get_plane_parts);
 	create_option(cheats, "Give MP5", ::mob_give_weapon, "mp5k_zm");
 	add_cfg_toggle(cheats, "Plane Timescale", "plane_timescale");
+}
 
-	teleport = add_submenu(cheats, "teleport", "Teleport");
+// Root rows of their own (user, 2026-11-05: the root has the space).
+mob_build_root_menus(root)
+{
+	teleport = add_submenu(root, "teleport", "Teleport");
 		add_cfg_toggle(teleport, "Return Key [{+actionslot 3}]", "tp_return");
 		foreach(name in level.mob_teleport_names)
 			create_option(teleport, name, ::mob_teleport, name);
 
-	afterlife = add_submenu(cheats, "afterlife", "Afterlife");
+	afterlife = add_submenu(root, "afterlife", "Afterlife");
 		add_cfg_toggle(afterlife, "Infinite Afterlives", "infinite_afterlives");
 		create_option(afterlife, "Infinite Mana: " + int_compare(is_true(self.infinite_mana)), ::mob_toggle_infinite_mana);
 		create_option(afterlife, "Refill Afterlives", ::mob_refill_afterlives);
-		add_cfg_toggle(afterlife, "Force Mantle Spawn", "force_mantle_spawn");
-		create_option(afterlife, "Set Mantle Spawn: " + mob_mantle_spawn_text(), ::mob_set_mantle_spawn);
+		add_cfg_toggle(afterlife, "Best Roof Spawn", "force_mantle_spawn");
+		create_option(afterlife, "Save Last Spawn: " + mob_mantle_spawn_text(), ::mob_set_mantle_spawn);
 
-	tomahawk = add_submenu(cheats, "tomahawk", "Tomahawk");
+	tomahawk = add_submenu(root, "tomahawk", "Tomahawk");
 		create_option(tomahawk, "Give Tomahawk", ::mob_give_tomahawk);
 		create_option(tomahawk, "Fill Wolves", ::mob_fill_wolves);
 		add_cfg_toggle(tomahawk, "Zero Cooldown", "no_tomahawk_cooldown");
@@ -113,7 +127,9 @@ mob_build_cheats(cheats)
 // Chat teleports: say a teleport name.
 mob_say_command(message)
 {
-    if(isdefined(level.mob_teleports[message]))
+    if(message == "gate" && isdefined(level.mob_gate_reset))
+        self [[ level.mob_gate_reset ]]();
+    else if(isdefined(level.mob_teleports[message]))
         self mob_teleport(message);
 }
 
@@ -679,13 +695,14 @@ mob_array_index(array, item)
 }
 
 /*##############################################################################
-                              Mantle spawn (under the plane)
+                              Best roof spawn (under the plane)
 ##############################################################################*/
 // Dying under the plane (zone_infirmary_roof) uses the nearest spawn group, where
-// the first death rolls a spot and later ones reuse it (see above). "Force mantle
-// spawn" claims the spot by the ghost mantle hole for the player before every
-// death, as if they had rolled it. The spot is set in game: die there until the
-// ghost lands at the mantle hole, then "Set this spawn as mantle" saves it.
+// the first death rolls a spot and later ones reuse it (see above). "Best Roof
+// Spawn" claims a spot for the player before every death, as if they had rolled
+// it: the spawn struct nearest the plane, or the one saved in game (die there until
+// the ghost lands on the spot wanted, then "Save Last Spawn"). Keys keep the old
+// mantle names.
 
 // After each afterlife spawn, remembers the spawn struct the ghost landed on
 // (afterlife_fake_revive puts the player on it 1 s after the corpse appears).
@@ -737,13 +754,34 @@ mob_set_mantle_spawn()
     level.base_cfg["mantle_spawn_y"] = int(s_spawn.origin[1]);
     level.base_cfg["mantle_spawn_z"] = int(s_spawn.origin[2]);
     self cfg_set_int("mantle_spawn_set", 1);
-    self iprintln("Mantle spawn set: " + int(s_spawn.origin[0]) + " " + int(s_spawn.origin[1]) + " " + int(s_spawn.origin[2]));
+    self iprintln("Best roof spawn saved: " + int(s_spawn.origin[0]) + " " + int(s_spawn.origin[1]) + " " + int(s_spawn.origin[2]));
 }
 
-// The saved mantle spawn struct and its group's spots, or undefined.
+// The spawn struct nearest the plane and its group's spots.
+mob_roof_spawn()
+{
+    best = undefined;
+    best_dist = undefined;
+    foreach(spawn_point in maps\mp\gametypes_zm\_zm_gametype::get_player_spawns_for_gametype())
+    {
+        spawns = getstructarray(spawn_point.target, "targetname");
+        foreach(s_spawn in spawns)
+        {
+            dist = distancesquared(s_spawn.origin, ROOF_SPOT);
+            if(isdefined(best_dist) && dist >= best_dist) continue;
+            best_dist = dist;
+            if(!isdefined(best)) best = spawnstruct();
+            best.spot = s_spawn;
+            best.spawns = spawns;
+        }
+    }
+    return best;
+}
+
+// The saved spawn struct and its group's spots, else the one nearest the plane.
 mob_mantle_spawn()
 {
-    if(!get_cfg_int("mantle_spawn_set")) return undefined;
+    if(!get_cfg_int("mantle_spawn_set")) return mob_roof_spawn();
     origin = (get_cfg_int("mantle_spawn_x"), get_cfg_int("mantle_spawn_y"), get_cfg_int("mantle_spawn_z"));
     foreach(spawn_point in maps\mp\gametypes_zm\_zm_gametype::get_player_spawns_for_gametype())
     {
@@ -757,7 +795,7 @@ mob_mantle_spawn()
             return mantle;
         }
     }
-    return undefined;
+    return mob_roof_spawn();
 }
 
 // Keeps the mantle spot claimed for the host while the setting is on, and no
@@ -787,11 +825,12 @@ mob_force_mantle_spawn()
 
 mob_mantle_spawn_text()
 {
-    if(!get_cfg_int("mantle_spawn_set")) return "^3not set";
-    return "^3set";
+    if(!get_cfg_int("mantle_spawn_set")) return "^3nearest plane";
+    return "^3saved";
 }
 
-// Timescale 10 from boarding until 30 s after the crash, when the setting is on.
+// Timescale 10 from boarding until a zombie is on the map after the crash, when the
+// setting is on (user, 2026-11-06). The cap is for a crash with none left to spawn.
 mob_plane_timescale()
 {
     level endon("end_game");
@@ -801,7 +840,7 @@ mob_plane_timescale()
         if(get_cfg_int("plane_timescale"))
             setdvar("timescale", SETUP_TIMESCALE);
         flag_wait("plane_crashed");
-        wait 30;
+        for(i = 0; i < 1200 && !get_current_zombie_count(); i++) wait 0.05;
         setdvar("timescale", 1);
         wait 60;
     }
