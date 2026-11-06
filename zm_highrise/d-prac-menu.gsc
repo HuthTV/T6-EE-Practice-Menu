@@ -6,7 +6,6 @@
 #include scripts\zm\utility_core\menu_utility;
 #include scripts\zm\dierise_menu\dierise;
 #include scripts\zm\dierise_menu\dierisefullgame;
-#include scripts\zm\dierise_menu\freeroam;
 #inline scripts\zm\dierise_menu\dierise;
 
 /*##############################################################################
@@ -16,8 +15,7 @@
 register_modes()
 {
 	level.modes = [];
-	register_mode("dierisefullgame", "Fullgame", ::dierisefullgame_initialize, ::dierisefullgame_run, ::dierisefullgame_build_menu);
-	register_mode("freeroam",        "Freeroam", ::freeroam_initialize,        ::freeroam_run);
+	mode_timer(register_mode("dierisefullgame", "Fullgame", ::dierisefullgame_initialize, ::dierisefullgame_run, ::dierisefullgame_build_menu), false, 0);
 }
 
 main()
