@@ -25,6 +25,8 @@ shared_practice_map()
     map.build_hud_top = ::shared_build_hud;
     map.build_cheats = ::shared_build_cheats;
     map.base_cfg_defaults = ::shared_base_cfg_defaults;
+    map.character_names = array("Dempsey", "Nikolai", "Richtofen", "Takeo");
+    map.character_chosen = ::origins_character_chosen;
     map.say_command = ::shared_say_command;
     map.say_help = "^7, ^3blood^7, ^3parts";
     map.menu_icon = "faction_tomb";
@@ -35,6 +37,12 @@ shared_practice_map()
     map.oopa_hud_spot = ::shared_r2l_hud_spot;
     map.oopa_hud_spot_label = "R2L";
     return map;
+}
+
+// As vanilla's assign_lowest_unused_character_index.
+origins_character_chosen(index)
+{
+    if(index == 2) level.has_richtofen = 1;
 }
 
 // The menu runs on classic Origins only. zm_tomb has no other game mode; the
