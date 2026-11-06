@@ -211,6 +211,43 @@ practice_start_time_next_preset()
     self cfg_increment_int("start_time", array(0, level.start_time.preset_count - 1));
 }
 
+// A start time with no presets: Start Minutes and Seconds rows between two limits.
+// Same cfg keys, so chat "time" works. Call the setup before the mode's cfg loads.
+practice_custom_time_setup(first_time, last_time, default_time)
+{
+    practice_start_time_setup("Start Time", first_time, last_time, 1, default_time);
+    level.start_time.last_seconds = practice_time_text_to_seconds(last_time);
+}
+
+practice_custom_time_defaults(settings_ar)
+{
+    settings_ar = practice_start_time_defaults(settings_ar);
+    settings_ar["custom_start"] = 1;
+    return settings_ar;
+}
+
+practice_custom_time_menu(menu)
+{
+    first = int(level.start_time.first_seconds / 60);
+    last = int(level.start_time.last_seconds / 60);
+    create_option(menu, "Start Minutes: ^3" + get_cfg_int("custom_start_minutes"), ::practice_custom_time_step, "custom_start_minutes", array(first, last));
+    create_option(menu, "Start Seconds: ^3" + get_cfg_int("custom_start_seconds"), ::practice_custom_time_step, "custom_start_seconds", array(0, 59));
+}
+
+// The set time inside the limits: past them, it reads as the nearest end.
+practice_custom_time_seconds()
+{
+    seconds = get_cfg_int("custom_start_minutes") * 60 + get_cfg_int("custom_start_seconds");
+    if(seconds < level.start_time.first_seconds) return level.start_time.first_seconds;
+    if(seconds > level.start_time.last_seconds) return level.start_time.last_seconds;
+    return seconds;
+}
+
+practice_custom_time_start_clock()
+{
+    level.game_start_time = getTime() - practice_custom_time_seconds() * 1000;
+}
+
 // Starts the run clock at the picked start time.
 practice_start_time_start_clock()
 {

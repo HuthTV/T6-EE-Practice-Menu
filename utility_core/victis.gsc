@@ -26,12 +26,13 @@ victis_practice_map(map, fridge_default, madeup_install)
     map.build_map_menu = ::victis_build_menu;
     map.victis_fridge_default = fridge_default;
     map.victis_madeup_install = madeup_install;
+    map.character_names = array("Russman", "Stuhlinger", "Misty", "Marlton");
 }
 
 victis_base_cfg_defaults(settings_ar)
 {
     settings_ar["victis_madeup"] = 1;
-    settings_ar["victis_fridge"] = victis_fridge_index(level.practice_map.victis_fridge_default);
+    settings_ar["victis_fridge_gun"] = victis_fridge_index(level.practice_map.victis_fridge_default);
     // The B2EE timer's defaults: every upgrade but Insta-Kill.
     foreach(key in victis_permaperk_keys())
         settings_ar["perma_" + key] = 1;
@@ -50,10 +51,23 @@ victis_initialize()
     level thread victis_on_player_connect();
 }
 
+// EE Progress states, the values of sq_<map>_last_completed.
+#define VICTIS_EE_INCOMPLETE  0
+#define VICTIS_EE_RICHTOFEN   1
+#define VICTIS_EE_MAXIS       2
+
 victis_build_menu(root)
 {
     victis = add_submenu(root, "victis", "Victis Settings", "Victis");
         create_option(victis, "Madeup Scripts: " + cfgint_compare("victis_madeup"), ::victis_toggle_madeup);
+
+        ee = add_submenu(victis, "victis_ee", "EE Progress");
+            labels = array("TranZit", "Die Rise", "Buried");
+            for(i = 0; i < labels.size; i++)
+                create_option(ee, labels[i] + ": " + victis_ee_state_label(self victis_ee_state(i)), ::victis_ee_next, i);
+            create_confirm_option(ee, "All Incomplete", "Confirm All Incomplete", ::victis_ee_set_all, VICTIS_EE_INCOMPLETE);
+            create_confirm_option(ee, "All Richtofen", "Confirm All Richtofen", ::victis_ee_set_all, VICTIS_EE_RICHTOFEN);
+            create_confirm_option(ee, "All Maxis", "Confirm All Maxis", ::victis_ee_set_all, VICTIS_EE_MAXIS);
 
         perks = add_submenu(victis, "victis_permaperks", "Permaperks");
             foreach(key in victis_permaperk_keys())
@@ -64,16 +78,86 @@ victis_build_menu(root)
             }
 
         options = victis_fridge_options();
-        choice = get_cfg_int("victis_fridge");
+        choice = get_cfg_int("victis_fridge_gun");
         if(choice < 0 || choice >= options.weapons.size) choice = 0;
         fridge = add_submenu(victis, "victis_fridge", "Fridge: ^3" + options.labels[choice], "Fridge");
-            for(i = 0; i < options.weapons.size; i++)
+            foreach(i in victis_fridge_rows())
             {
-                if(!victis_fridge_available(options.weapons[i])) continue;
                 text = options.labels[i];
                 if(i == choice) text = "^3" + text;
                 create_option(fridge, text, ::victis_set_fridge, i);
             }
+}
+
+// Indexes of the options this map's fridge hands out. Built once: the menu rebuilds
+// on every change.
+victis_fridge_rows()
+{
+    if(isdefined(level.victis_fridge_shown)) return level.victis_fridge_shown;
+
+    options = victis_fridge_options();
+    rows = [];
+    for(i = 0; i < options.weapons.size; i++)
+        if(victis_fridge_available(options.weapons[i])) rows[rows.size] = i;
+    level.victis_fridge_shown = rows;
+    return rows;
+}
+
+/*##############################################################################
+                              EE progress
+##############################################################################*/
+// The player's real saved Victis progress, the stats Buried's endgame machine reads
+// and clears (user, 2026-11-06). All three maps can write all three: every stat is
+// in the player's global list. A map reads them at start, so a change applies on
+// restart. The rows show the stats, nothing of this is in a cfg.
+//   sq_<map>_last_completed    the state below
+//   navcard_applied_zm_<map>   the card went in that map's computer
+//   navcard_held_zm_<map>      the card is held, not yet applied
+//   sq_<map>_started           the map's computer is built
+victis_ee_stat_map(index)
+{
+    maps = array("transit", "highrise", "buried");
+    return maps[index];
+}
+
+victis_ee_state(index)
+{
+    return self maps\mp\zombies\_zm_stats::get_global_stat("sq_" + victis_ee_stat_map(index) + "_last_completed");
+}
+
+victis_ee_state_label(state)
+{
+    if(state == VICTIS_EE_RICHTOFEN) return "^4Richtofen";
+    if(state == VICTIS_EE_MAXIS) return "^3Maxis";
+    return "^9incomplete";
+}
+
+victis_ee_set(index, state)
+{
+    map = victis_ee_stat_map(index);
+    done = 0;
+    if(state != VICTIS_EE_INCOMPLETE) done = 1;
+    self maps\mp\zombies\_zm_stats::set_global_stat("sq_" + map + "_last_completed", state);
+    self maps\mp\zombies\_zm_stats::set_global_stat("navcard_applied_zm_" + map, done);
+    self maps\mp\zombies\_zm_stats::set_global_stat("navcard_held_zm_" + map, 0);
+    self maps\mp\zombies\_zm_stats::set_global_stat("sq_" + map + "_started", done);
+}
+
+// Menu action: the map's next state.
+victis_ee_next(index)
+{
+    self victis_ee_set(index, (self victis_ee_state(index) + 1) % 3);
+    self iprintln("EE progress applies on restart");
+    self refresh_menu();
+}
+
+// Menu action.
+victis_ee_set_all(state)
+{
+    for(i = 0; i < 3; i++)
+        self victis_ee_set(i, state);
+    self iprintln("EE progress applies on restart");
+    self refresh_menu();
 }
 
 victis_toggle_madeup()
@@ -91,7 +175,7 @@ victis_toggle_permaperk(key)
 // The fridge is read when it is used, so a new choice applies at once.
 victis_set_fridge(choice)
 {
-    self cfg_set_int("victis_fridge", choice);
+    self cfg_set_int("victis_fridge_gun", choice);
     foreach(player in get_players())
         player victis_rig_fridge();
     self iprintln("Fridge: " + victis_fridge_options().labels[choice]);
@@ -165,34 +249,95 @@ victis_apply_permaperks()
 /*##############################################################################
                               Fridge
 ##############################################################################*/
-// Weapons from the B2EE timer's fridge_list.md. The saved value is the index:
+// Every weapon of the B2EE timer's fridge_list.md. The saved value is the index:
 // keep the order and add new weapons at the end. The menu lists the ones the
-// fridge hands out on this map (victis_fridge_available).
+// fridge hands out on this map (victis_fridge_available). Built once.
 victis_fridge_options()
 {
+    if(isdefined(level.victis_fridge_list)) return level.victis_fridge_list;
+
     options = spawnstruct();
     options.weapons = [];
     options.labels = [];
     victis_add_option(options, "", "untouched");
     victis_add_option(options, "none", "empty");
-    victis_add_option(options, "usrpg_upgraded_zm", "RPG PaP");
-    victis_add_option(options, "svu_zm", "SVU");
-    victis_add_option(options, "svu_upgraded_zm+vzoom", "SVU PaP");
-    victis_add_option(options, "tar21_upgraded_zm+mms", "MTAR PaP (MMS)");
-    victis_add_option(options, "tar21_upgraded_zm+reflex", "MTAR PaP (Reflex)");
-    victis_add_option(options, "mp5k_zm", "MP5");
-    victis_add_option(options, "mp5k_upgraded_zm", "MP5 PaP");
-    victis_add_option(options, "an94_upgraded_zm+mms", "AN-94 PaP");
-    victis_add_option(options, "galil_upgraded_zm+reflex", "Galil PaP");
-    victis_add_option(options, "saritch_upgraded_zm+mms", "SMR PaP");
-    victis_add_option(options, "hamr_upgraded_zm+reflex", "HAMR PaP");
-    victis_add_option(options, "rpd_upgraded_zm", "RPD PaP");
-    victis_add_option(options, "m32_upgraded_zm", "War Machine PaP");
-    victis_add_option(options, "rnma_upgraded_zm", "Remington PaP");
-    victis_add_option(options, "pdw57_upgraded_zm+mms", "PDW-57 PaP");
-    victis_add_option(options, "type95_upgraded_zm+mms", "Type 25 PaP");
-    victis_add_option(options, "xm8_upgraded_zm+mms", "M8A1 PaP");
+    // Snipers first (user, 2026-11-05).
+    victis_add_gun(options, "svu", "SVU", array("vzoom"));
+    victis_add_gun(options, "dsr50", "DSR 50", array("is", "silencer", "vzoom"));
+    victis_add_gun(options, "barretm82", "Barrett M82A1", array("vzoom"));
+    victis_add_gun(options, "870mcs", "Remington 870", array("extbarrel", "reflex"));
+    victis_add_gun(options, "ak74u", "AK74u", array("reflex"));
+    victis_add_gun(options, "an94", "AN-94", array("grip", "mms", "rangefinder", "reflex"));
+    victis_add_gun(options, "beretta93r", "B23R", array("dualclip", "extbarrel"));
+    victis_add_gun(options, "fiveseven", "Five-seven", array("dualclip", "extbarrel"));
+    victis_add_gun(options, "fivesevendw", "Five-seven DW");
+    victis_add_gun(options, "fnfal", "FAL", array("reflex"));
+    victis_add_gun(options, "galil", "Galil", array("reflex"));
+    victis_add_gun(options, "hamr", "HAMR", array("acog", "grip", "reflex"));
+    victis_add_gun(options, "judge", "Executioner", array("dualclip_judge", "extbarrel"));
+    victis_add_gun(options, "kard", "KAP-40", array("dualclip", "extbarrel"));
+    victis_add_gun(options, "lsat", "LSAT", array("acog", "grip", "rangefinder", "reflex"));
+    victis_add_gun(options, "m14", "M14");
+    victis_add_option(options, "m16_zm", "M16");
+    victis_add_option(options, "m16_gl_upgraded_zm", "M16 PaP");
+    victis_add_gun(options, "m32", "War Machine");
+    victis_add_gun(options, "mp5k", "MP5");
+    victis_add_gun(options, "pdw57", "PDW-57", array("mms", "rangefinder", "reflex"));
+    victis_add_gun(options, "python", "Python");
+    victis_add_gun(options, "qcw05", "Chicom", array("dualclip", "grip", "reflex", "sf"));
+    victis_add_gun(options, "rpd", "RPD");
+    victis_add_gun(options, "rnma", "Remington");
+    victis_add_gun(options, "rottweil72", "Olympia");
+    victis_add_gun(options, "saiga12", "S12", array("extbarrel", "reflex"));
+    victis_add_gun(options, "saritch", "SMR", array("dualoptic", "mms", "rangefinder", "reflex"));
+    victis_add_gun(options, "srm1216", "M1216", array("extbarrel", "reflex"));
+    victis_add_gun(options, "tar21", "MTAR", array("gl", "longbreath", "mms", "rangefinder", "reflex"));
+    victis_add_gun(options, "type95", "Type 25", array("gl", "longbreath", "mms", "rangefinder", "reflex"));
+    victis_add_gun(options, "usrpg", "RPG");
+    victis_add_gun(options, "xm8", "M8A1", array("gl", "longbreath", "mms", "rangefinder", "reflex"));
+    level.victis_fridge_list = options;
     return options;
+}
+
+// A gun and its PaP versions: one with no attachment list, else one per attachment
+// (the attachment shows in the label only when there is a choice).
+victis_add_gun(options, gun, label, attachments)
+{
+    victis_add_option(options, gun + "_zm", label);
+    if(!isdefined(attachments))
+    {
+        victis_add_option(options, gun + "_upgraded_zm", label + " PaP");
+        return;
+    }
+    foreach(attachment in attachments)
+    {
+        text = label + " PaP";
+        if(attachments.size > 1) text += " (" + victis_attachment_label(attachment) + ")";
+        victis_add_option(options, gun + "_upgraded_zm+" + attachment, text);
+    }
+}
+
+victis_attachment_label(attachment)
+{
+    switch(attachment)
+    {
+        case "acog":            return "ACOG";
+        case "dualclip":
+        case "dualclip_judge":  return "Fast Mags";
+        case "dualoptic":       return "Hybrid";
+        case "extbarrel":       return "Long Barrel";
+        case "gl":              return "GL";
+        case "grip":            return "Grip";
+        case "is":              return "Iron Sights";
+        case "longbreath":      return "Long Breath";
+        case "mms":             return "MMS";
+        case "rangefinder":     return "Target Finder";
+        case "reflex":          return "Reflex";
+        case "sf":              return "Select Fire";
+        case "silencer":        return "Suppressor";
+        case "vzoom":           return "Variable Zoom";
+    }
+    return attachment;
 }
 
 victis_add_option(options, value, label)
@@ -227,7 +372,7 @@ victis_fridge_available(weapon)
 victis_fridge_weapon()
 {
     options = victis_fridge_options();
-    choice = get_cfg_int("victis_fridge");
+    choice = get_cfg_int("victis_fridge_gun");
     if(choice <= 0 || choice >= options.weapons.size) return undefined;
     return options.weapons[choice];
 }
@@ -292,4 +437,141 @@ victis_madeup_players()
         }
     }
     level.starting_player_count = get_players().size;
+}
+
+/*##############################################################################
+                              Forced box guns
+##############################################################################*/
+// With the Better Box permaperk vanilla picks from the upgrade's own list and never
+// reaches level.customrandomweaponweights, where a mode forces its guns. A mode hands
+// over due_func, which returns the gun due on this hit or undefined. A forced hit
+// then takes the normal path, the other hits run the upgrade as vanilla.
+victis_box_install(due_func)
+{
+    level.victis_box_due = due_func;
+    replacefunc(maps\mp\zombies\_zm_pers_upgrades_functions::pers_treasure_chest_choosespecialweapon, ::victis_pers_choose_weapon);
+}
+
+// The hit about to be rolled on the first box, 0 once the box has moved. A hit counts
+// when it ends, so level.chest_accessed is the hits before this one.
+victis_box_hit()
+{
+    if(level.chest_moves > 0) return 0;
+    return level.chest_accessed + 1;
+}
+
+// OVERRIDE: maps\mp\zombies\_zm_pers_upgrades_functions::pers_treasure_chest_choosespecialweapon
+victis_pers_choose_weapon( player )
+{
+    //MODIFIED: a forced hit skips the upgrade's list.
+    if ( isdefined( [[ level.victis_box_due ]]() ) )
+        return maps\mp\zombies\_zm_magicbox::treasure_chest_chooseweightedrandomweapon( player );
+    //MODIFIED END
+
+    rval = randomfloat( 1 );
+
+    if ( !isdefined( player.pers_magic_box_weapon_count ) )
+        player.pers_magic_box_weapon_count = 0;
+
+    if ( player.pers_magic_box_weapon_count < 2 && ( player.pers_magic_box_weapon_count == 0 || rval < 0.6 ) )
+    {
+        player.pers_magic_box_weapon_count++;
+
+        if ( isdefined( level.pers_treasure_chest_get_weapons_array_func ) )
+            [[ level.pers_treasure_chest_get_weapons_array_func ]]();
+        else
+            maps\mp\zombies\_zm_pers_upgrades_functions::pers_treasure_chest_get_weapons_array();
+
+        keys = array_randomize( level.pers_box_weapons );
+        pap_triggers = getentarray( "specialty_weapupgrade", "script_noteworthy" );
+
+        for ( i = 0; i < keys.size; i++ )
+        {
+            if ( maps\mp\zombies\_zm_magicbox::treasure_chest_canplayerreceiveweapon( player, keys[i], pap_triggers ) )
+                return keys[i];
+        }
+
+        return keys[0];
+    }
+
+    player.pers_magic_box_weapon_count = 0;
+    return maps\mp\zombies\_zm_magicbox::treasure_chest_chooseweightedrandomweapon( player );
+}
+
+/*##############################################################################
+                              Held Max Ammo
+##############################################################################*/
+// Keeps a Max Ammo for a moment of the run: while the cfg setting key is on, the Max
+// is the last drop of the cycle, so it is always still ahead. victis_max_release
+// moves it up to the current place, so it is the next drop. Call install while the
+// map loads and victis_max_hold from the mode's run.
+victis_max_install(key)
+{
+    level.victis_max_key = key;
+    replacefunc(maps\mp\zombies\_zm_powerups::randomize_powerups, ::victis_randomize_powerups);
+}
+
+victis_max_held()
+{
+    return isdefined(level.victis_max_key) && !is_true(level.victis_max_done) && get_cfg_int(level.victis_max_key);
+}
+
+// Late maps add powerups after the first shuffle, so a mode's run places it again.
+victis_max_hold()
+{
+    if(victis_max_held()) victis_place_max(false);
+}
+
+// final: no more moments to hold it for.
+victis_max_release(final)
+{
+    if(is_true(final)) level.victis_max_done = true;
+    if(!get_cfg_int(level.victis_max_key)) return;
+    victis_place_max(true);
+    println("Prac: Max Ammo is the next drop");
+}
+
+// OVERRIDE: maps\mp\zombies\_zm_powerups::randomize_powerups
+victis_randomize_powerups()
+{
+    level.zombie_powerup_array = array_randomize( level.zombie_powerup_array );
+
+    //MODIFIED: the first shuffles run before the index exists.
+    if ( isdefined( level.zombie_powerup_index ) && victis_max_held() )
+        victis_place_max( false );
+    //MODIFIED END
+}
+
+// Takes the Max out of the cycle and puts it next (is_next) or last. The other drops
+// keep their order, and the index keeps pointing at the same next drop.
+victis_place_max(is_next)
+{
+    next = level.zombie_powerup_index;
+    rest = [];
+    found = false;
+    for(i = 0; i < level.zombie_powerup_array.size; i++)
+    {
+        if(level.zombie_powerup_array[i] != "full_ammo")
+        {
+            rest[rest.size] = level.zombie_powerup_array[i];
+            continue;
+        }
+        found = true;
+        if(i < next) next--;
+    }
+    if(!found) return;
+
+    place = rest.size;
+    if(is_next) place = next;
+
+    cycle = [];
+    for(i = 0; i < rest.size; i++)
+    {
+        if(i == place) cycle[cycle.size] = "full_ammo";
+        cycle[cycle.size] = rest[i];
+    }
+    if(place == rest.size) cycle[cycle.size] = "full_ammo";
+
+    level.zombie_powerup_array = cycle;
+    level.zombie_powerup_index = next;
 }

@@ -17,14 +17,22 @@
 // defaults (a setting added after the save keeps its default), saves that as the
 // mode cfg and restarts the map, so every setting applies.
 //
+// Slot 1 starts with the mode's defaults, called Default, unless the mode fills it
+// itself (Fullgame's Normal 29 RNG). Restore Defaults puts it back.
+//
+// A slot's row is green with a star while the mode's settings match that slot, so it
+// shows what is loaded and goes the moment a setting changes (user, 2026-11-06).
+//
 // Chat "slot <n> <name>" names slot n of the current mode, "slot <n>" clears it.
 #define SAVESLOT_COUNT      4
 #define SAVESLOT_NAME_MAX   16  // Longer names run past the menu's right edge.
+#define SAVESLOT_DEFAULT_NAME   "Default"
 
 // ">Slot n" rows of Presets, above Restore Defaults.
 add_saveslots_menu()
 {
 	if(!saveslots_available()) return;
+	if(!saveslot_has_settings(saveslot_get(1))) saveslot_put_default();
 	for(slot = 1; slot <= SAVESLOT_COUNT; slot++)
 	{
 		saved = saveslot_get(slot);
@@ -32,6 +40,7 @@ add_saveslots_menu()
 		name = saveslot_name(saved);
 		if(name != "") label += ": " + name;
 		if(!saveslot_has_settings(saved)) label += " ^9(empty)";
+		else if(saveslot_is_active(saved)) label = "^2" + label + " *^7";
 
 		menu = add_submenu("presets", "saveslot" + slot, label, "Slot " + slot);
 			create_option(menu, "Load & Restart", ::saveslot_load, slot);
@@ -43,10 +52,11 @@ add_saveslots_menu()
 	}
 }
 
-// Modes without a Settings menu (the skeleton Freeroams) have nothing to save.
+// Modes without a Settings menu have nothing to save. A map or a mode can turn slots
+// off (no_slots), which hides Presets.
 saveslots_available()
 {
-	if(is_true(level.mode.no_slots)) return false;
+	if(is_true(level.mode.no_slots) || is_true(level.practice_map.no_slots)) return false;
 	return isDefined(level.mode_cfg_str) && isDefined(self.menu) && isDefined(self.menu.option_text["mapsettings"]);
 }
 
@@ -75,6 +85,27 @@ saveslot_put(slot, saved)
 		fs_remove(saveslot_file(slot));
 	else
 		write_config(saved, saveslot_file(slot));
+}
+
+// The mode's defaults into slot 1.
+saveslot_put_default()
+{
+	saved = level.mode_cfg_defaults;
+	saved["slot_name"] = SAVESLOT_DEFAULT_NAME;
+	saveslot_put(1, saved);
+}
+
+// Whether the mode's settings are what loading this slot gives: the slot over the
+// defaults. Keys only an old file holds do not count.
+saveslot_is_active(saved)
+{
+	foreach(key in getarraykeys(level.mode_cfg_defaults))
+	{
+		value = level.mode_cfg_defaults[key];
+		if(isDefined(saved[key])) value = saved[key];
+		if("" + value != "" + level.mode_cfg[key]) return false;
+	}
+	return true;
 }
 
 saveslot_name(saved)

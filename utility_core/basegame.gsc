@@ -31,6 +31,9 @@
 //   oopa_hud_spot_label        name of its "only" choice in the HUD menu, like "R2L only"
 //   hud_left_shift()           x offset for the left HUD (zone, HP) (self = player)
 //   run()                      map-wide threads, started with the core HUDs
+//   fixed_splits               the Timer menu is on or off only, no row per split
+//   character_names            the map's players by characterindex, for the Character row
+//   character_chosen(index)    the level state vanilla sets for that character
 practice_map(menu_title, tool_name, cfg_dir, mode_dvar)
 {
     map = spawnstruct();
@@ -55,10 +58,13 @@ practice_main(map, version)
 
     flag_init("menu_active");
     set_dvar_if_unset(map.mode_dvar, level.modes[0].name);
+    // A co-op game never loads a solo setup left in the dvar.
+    if(getnumexpectedplayers() > 1) setDvar(map.mode_dvar, level.modes[0].name);
     level.mode = get_mode(getDvar(map.mode_dvar));
     level.gamemode = level.mode.name;
 
     basegame_initialize();
+    level thread basegame_character_install();
     [[ level.mode.initialize ]]();
 
     flag_wait("initial_blackscreen_passed");
@@ -168,6 +174,7 @@ basegame_default_cfg()
     settings_ar["hud_oopa"] = 1; // OOPA Countdown: 0 off, 1 on, 2 the map's spot only (Origins: R2L)
     settings_ar["show_identifier"] = 1; // Plutonium's session identifier and script hashes (user, 2026-11-02).
     settings_ar["menu_key"] = 0; // The key that opens the menu with melee: 0 special grenade (user, 2026-11-02), 1 dpad slot 1 (the shield).
+    settings_ar["player_character"] = 0; // 0 as vanilla picks, else 1 + the characterindex (user, 2026-11-06).
 
     if(isDefined(level.practice_map.base_cfg_defaults))
         settings_ar = [[ level.practice_map.base_cfg_defaults ]](settings_ar);
@@ -272,20 +279,58 @@ basegame_points_hud_monitor()
     }
 }
 
+// The player's character, in every mode of the map. Vanilla's own function runs
+// after setting the index, as the B2 patches do (override_personality_character).
+basegame_character_install()
+{
+    while(!isDefined(level.givecustomcharacters)) wait 0.05;
+    level.practice_give_character = level.givecustomcharacters;
+    level.givecustomcharacters = ::basegame_give_character;
+}
+
+basegame_give_character()
+{
+    index = get_cfg_int("player_character") - 1;
+    if(index >= 0)
+    {
+        self.characterindex = index;
+        if(isDefined(level.practice_map.character_chosen)) [[ level.practice_map.character_chosen ]](index);
+    }
+    self [[ level.practice_give_character ]]();
+}
+
+// Menu action. The model and voice are given at spawn.
+basegame_next_character(last)
+{
+    self cfg_increment_int("player_character", array(0, last));
+    self iprintln("Character applies on restart");
+}
+
 // Active zones HUD (hud_active_zones): every zone the zone manager keeps active,
 // one per line. Built and destroyed by the setting, like the other optional HUDs.
 // setTextUnlimited, as the text keeps changing (settext fills the configstrings).
+// A dark box behind it, sized from the text, keeps it readable on bright ground
+// (user, 2026-11-06). HUD text has no measured size, so the box uses the
+// ACTIVE_ZONES_CHAR_WIDTH and ACTIVE_ZONES_LINE_HEIGHT estimates.
+#define ACTIVE_ZONES_CHAR_WIDTH   6
+#define ACTIVE_ZONES_LINE_HEIGHT  14
+#define ACTIVE_ZONES_BOX_MARGIN   4
+#define ACTIVE_ZONES_BOX_ALPHA    0.35
+
 basegame_active_zones_hud_monitor()
 {
     level endon("end_game");
     hud = undefined;
+    box = undefined;
     text = "";
     while(true)
     {
         if(!get_cfg_int("hud_active_zones") || !isDefined(level.zones))
         {
             if(isDefined(hud)) hud destroy();
+            if(isDefined(box)) box destroy();
             hud = undefined;
+            box = undefined;
             text = "";
         }
         else
@@ -302,16 +347,37 @@ basegame_active_zones_hud_monitor()
                 hud.x = 100;
                 hud.y = 30;
                 hud.hidewheninmenu = 1;
+                hud.sort = 1;
+
+                box = createServerIcon("white", 1, 1);
+                box.alignx = "left";
+                box.aligny = "top";
+                box.horzalign = "left";
+                box.vertalign = "middle";
+                box.x = hud.x - ACTIVE_ZONES_BOX_MARGIN;
+                box.y = hud.y - ACTIVE_ZONES_BOX_MARGIN;
+                box.color = (0, 0, 0);
+                box.alpha = ACTIVE_ZONES_BOX_ALPHA;
+                box.hidewheninmenu = 1;
+                box.sort = 0;
             }
             new_text = "active zones:";
+            longest = new_text.size;
+            lines = 1;
             zones = maps\mp\zombies\_zm_zonemgr::get_active_zone_names();
             if(isDefined(zones))
                 foreach(zone in zones)
-                    new_text = new_text + "\n" + basegame_plain_zone_name(zone);
+                {
+                    name = basegame_plain_zone_name(zone);
+                    new_text = new_text + "\n" + name;
+                    if(name.size > longest) longest = name.size;
+                    lines++;
+                }
             if(new_text != text)
             {
                 hud setTextUnlimited(new_text);
                 text = new_text;
+                box setShader("white", longest * ACTIVE_ZONES_CHAR_WIDTH + ACTIVE_ZONES_BOX_MARGIN * 2, lines * ACTIVE_ZONES_LINE_HEIGHT + ACTIVE_ZONES_BOX_MARGIN * 2);
             }
         }
         wait 0.25;
@@ -639,6 +705,7 @@ say_command_monitor()
 		// Before the lowercasing below: slot names keep their case.
 		if(player saveslot_say_command(message)) continue;
 		if(player practice_time_say_command(tolower(message))) continue;
+		if(player change_map_say_command(tolower(message))) continue;
 		switch(tolower(message))
 		{
 			case "help":
@@ -688,7 +755,7 @@ say_command_monitor()
 
 basegame_say_help()
 {
-	self iprintln("^3restart^7, ^3time^7, ^3save^7, ^3load^7, ^3slot");
+	self iprintln("^3restart^7, ^3map^7, ^3time^7, ^3save^7, ^3load^7, ^3slot");
 	line = "^3max^7, ^3insta^7, ^3nuke^7, ^3double^7, ^3points^7, ^3demi^7, ^3pap^7, ^3doors";
 	if(isDefined(level.practice_map.say_help)) line += level.practice_map.say_help;
 	self iprintln(line);
@@ -741,7 +808,8 @@ basegame_unitrigger_hud_monitor()
                     record = spawnstruct();
                     record.player = player;
                     record.hud = player createFontString("default", 1.1);
-                    record.hud setpoint("RIGHT", "TOP", -12, 110); // Left of centre, clear of the menu panel.
+                    // Left aligned, right of the split timer's column, clear of the menu panel.
+                    record.hud setpoint("LEFT", "TOP", -200, 110);
                     record.text = "";
                     level.unitrigger_debug_huds[index] = record;
                 }
