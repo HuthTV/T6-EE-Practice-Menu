@@ -6,7 +6,10 @@
 #include scripts\zm\utility_core\menu_utility;
 #include scripts\zm\buried_menu\buried;
 #include scripts\zm\buried_menu\buriedfullgame;
-#include scripts\zm\buried_menu\freeroam;
+#include scripts\zm\buried_menu\mazeprac;
+#include scripts\zm\buried_menu\bellstart;
+#include scripts\zm\buried_menu\wispric;
+#include scripts\zm\buried_menu\wispmax;
 #inline scripts\zm\buried_menu\buried;
 
 /*##############################################################################
@@ -16,8 +19,11 @@
 register_modes()
 {
 	level.modes = [];
-	register_mode("buriedfullgame", "Fullgame", ::buriedfullgame_initialize, ::buriedfullgame_run, ::buriedfullgame_build_menu);
-	register_mode("freeroam",       "Freeroam", ::freeroam_initialize,       ::freeroam_run);
+	mode_timer(register_mode("buriedfullgame", "Fullgame", ::buriedfullgame_initialize, ::buriedfullgame_run, ::buriedfullgame_build_menu), false, BURIED_SPLIT_BOXHIT);
+	mode_timer(register_mode("mazeprac", "Maze Prac", ::mazeprac_initialize, ::mazeprac_run, ::mazeprac_build_menu), false, BURIED_SPLIT_SHARPSHOOTER);
+	mode_timer(register_mode("bellstart", "Bell Start", ::bellstart_initialize, ::bellstart_run, ::bellstart_build_menu), false, BURIED_SPLIT_SHARPSHOOTER);
+	mode_timer(register_mode("wispric", "Richtofen Wisp", ::wispric_initialize, ::wispric_run, ::wispric_build_menu), false, BURIED_SPLIT_TIME_TRAVEL);
+	mode_timer(register_mode("wispmax", "Maxis Wisp", ::wispmax_initialize, ::wispmax_run, ::wispmax_build_menu), false, BURIED_SPLIT_TIME_TRAVEL);
 }
 
 main()

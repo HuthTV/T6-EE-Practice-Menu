@@ -21,6 +21,12 @@ buried_practice_map()
     map.accent_color = (0.76, 0.6, 0.42); // Western tan (user, 2026-11-04)
     map.cursor_color = (0.9, 0.74, 0.54);
     map.header_text_color = (0, 0, 0);
+    map.menu_icon = "specialty_vulture_zombies"; // Vulture Aid (user, 2026-11-06).
+    // The Timer menu is on or off only, as TranZit and Die Rise.
+    map.split_names = array("boxhit", "ghosts", "cipher", "time_travel", "sharpshooter");
+    map.split_labels = array("Boxhit", "Ghosts", "Cipher", "Time Travel", "Sharpshooter");
+    map.fixed_splits = true;
+    map.no_slots = true; // No Presets menu (user, 2026-11-05).
     // MTAR PaP (MMS): the B2EE timer's solo Buried fridge.
     victis_practice_map(map, "tar21_upgraded_zm+mms", ::buried_madeup_install);
     return map;

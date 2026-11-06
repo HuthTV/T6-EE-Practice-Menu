@@ -5,25 +5,31 @@
 #include scripts\zm\utility_core\basegame;
 #include scripts\zm\utility_core\menu_base;
 #include scripts\zm\utility_core\menu_utility;
+#include scripts\zm\utility_core\victis;
+#include scripts\zm\buried_menu\buriedquest;
+#include scripts\zm\buried_menu\buriedsplits;
 #inline scripts\zm\buried_menu\buried;
 
 /*##############################################################################
                               Buried Fullgame
 ##############################################################################*/
-// A normal game from round 1 with the run's RNG set: the first three box hits,
-// 3% drops, the first ghost round's perk, the Infinity round (Richtofen time
-// bomb round of zm_buried_sq_tpo: body spots, which search finds the switch, the
-// drop after it) and the maze switches of zm_buried_sq_ip (maze layout, side of
-// each switch, solution order). The fridge and the solo time bomb fix are map
-// settings (Victis Settings, buried.gsc).
+// A normal game from round 1 with the run's RNG set: the hit of each route gun,
+// 3% drops, whether the first ghost round's perk is Vulture Aid, the Infinity round
+// (Richtofen time bomb round of zm_buried_sq_tpo: body spots, which search finds
+// the switch, the 1% bodies, the Max Ammo after it) and the switches of
+// zm_buried_sq_ip (maze layout, side and order by colour), which tunnel signs each
+// side punches and Richtofen's wisp path, and Maxis's bell order. The fridge and the
+// solo time bomb fix are map settings (Victis Settings, buried.gsc).
 
-#define BOX_HITS          3
+#define BOX_LAST_HIT      8     // Vanilla's first box always moves on hit 9.
 #define CORPSES           4     // Vanilla get_randomized_corpse_list has four bodies.
-#define MAZE_SWITCHES     4     // Rows shown. Extra rows do nothing if the map has fewer levers.
+#define VULTURE_AID       "specialty_nomotionsensor"
 
 #define SIDE_RANDOM       0
 #define SIDE_NORTH_WEST   1
 #define SIDE_SOUTH_EAST   2
+
+#define BELLS             9     // sq_bp_button structs, script_string light_01 to light_09.
 
 buriedfullgame_initialize()
 {
@@ -33,40 +39,57 @@ buriedfullgame_initialize()
     replacefunc(maps\mp\zm_buried_sq_tpo::item_is_on_corpse, ::buriedfullgame_item_is_on_corpse);
     replacefunc(maps\mp\zm_buried_sq_ip::sq_ml_spawn_lever, ::buriedfullgame_sq_ml_spawn_lever);
     replacefunc(maps\mp\zm_buried_sq_ip::sq_ml_puzzle_logic, ::buriedfullgame_sq_ml_puzzle_logic);
+    replacefunc(maps\mp\zm_buried_sq_ip::sq_bp_start_puzzle_lights, ::buriedfullgame_sq_bp_start_puzzle_lights);
+    buried_quest_install();
+    victis_box_install(::buriedfullgame_box_gun_due);
+    victis_max_install("infinity_max");
     level.buriedfullgame_ghost_perks = 0;
     mode_cfg_load("buriedfullgame", buriedfullgame_default_cfg());
+
+    // Read when they happen, so they need no restart. The Max is placed from the
+    // start of the game, the layout locked once and the signs set at map load.
+    level.practice_map.live_cfg_keys = [];
+    foreach(key in getarraykeys(level.mode_cfg_defaults))
+        if(key != "infinity_max" && key != "maze_layout" && !issubstr(key, "sign_"))
+            level.practice_map.live_cfg_keys[level.practice_map.live_cfg_keys.size] = key;
 }
 
 buriedfullgame_run()
 {
     // zm_buried main sets its own (pass-through) weights, so this goes after it.
-    level.buriedfullgame_box_hits = 0;
     level.customrandomweaponweights = ::buriedfullgame_box_hit_weights;
-    level thread buriedfullgame_special_round_drop();
+    level._zombiemode_chest_joker_chance_override_func = ::buriedfullgame_box_joker_chance;
+    victis_max_hold();
+    level thread buriedfullgame_infinity_max();
 
     flag_wait("initial_blackscreen_passed");
     buriedfullgame_lock_maze();
     flag_set("menu_active");
+    level thread buried_split_timer(BURIED_SPLIT_BOXHIT);
 }
 
 buriedfullgame_default_cfg()
 {
     settings_ar = [];
     settings_ar["percent_drops"] = 1;
-    settings_ar["box_hit_1"] = 1;          // Paralyzer, Time Bomb, Ballistic Knife: the route's
-    settings_ar["box_hit_2"] = 2;          // first three hits (user, 2026-11-03).
-    settings_ar["box_hit_3"] = 3;
-    settings_ar["ghost_perk"] = 0;
+    settings_ar["box_paralyzer"] = 1;      // The route's first three hits (user, 2026-11-03).
+    settings_ar["box_time_bomb"] = 2;
+    settings_ar["box_knife"] = 3;
+    settings_ar["ghost_vulture"] = 1;
     for(i = 1; i <= CORPSES; i++)
         settings_ar["body_spot_" + i] = 0;
-    settings_ar["switch_search"] = 0;
-    settings_ar["special_round_drop"] = 0;
+    settings_ar["switch_found"] = 0;
+    settings_ar["percent_bodies"] = 1;
+    settings_ar["infinity_max"] = 0;
     settings_ar["maze_layout"] = 0;
-    for(i = 1; i <= MAZE_SWITCHES; i++)
+    foreach(color in buriedfullgame_switch_colors())
     {
-        settings_ar["switch_side_" + i] = SIDE_RANDOM;
-        settings_ar["switch_order_" + i] = 0;
+        settings_ar["switch_side_" + color] = SIDE_RANDOM;
+        settings_ar["switch_order_" + color] = 0;
     }
+    settings_ar = buried_quest_defaults(settings_ar);
+    for(i = 1; i <= BELLS; i++)
+        settings_ar["bell_" + i] = 0;
     return settings_ar;
 }
 
@@ -74,26 +97,41 @@ buriedfullgame_build_menu(root)
 {
     settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
         add_cfg_toggle(settings, "3% Drops", "percent_drops");
-        add_cfg_choice(settings, "Ghost Perk", "ghost_perk", buriedfullgame_perk_options().labels);
+        add_cfg_toggle(settings, "Ghost Vulture", "ghost_vulture", "^2yes", "^3no");
 
         box = add_submenu(settings, "box", "Mystery Box", "Box");
-            box_guns = buriedfullgame_box_hit_options();
-            for(i = 1; i <= BOX_HITS; i++)
-                add_cfg_choice(box, "Hit " + i, "box_hit_" + i, box_guns.labels);
+            guns = buriedfullgame_box_guns();
+            for(i = 0; i < guns.keys.size; i++)
+                create_option(box, guns.labels[i] + ": ^3hit " + get_cfg_int(guns.keys[i]), ::buriedfullgame_box_hit_next, guns.keys[i]);
 
         special = add_submenu(settings, "infinity", "Infinity Round", "Infinity Round");
             spots = buriedfullgame_corpse_spot_labels();
             for(i = 1; i <= CORPSES; i++)
                 buriedfullgame_add_choice(special, "Body " + i + " Spot", "body_spot_" + i, spots);
-            add_cfg_choice(special, "Switch Search", "switch_search", array("random", "1st", "2nd", "3rd", "4th"));
-            add_cfg_choice(special, "Drop After Round", "special_round_drop", buriedfullgame_drop_options().labels);
+            // The 1st search can never find it (see item_is_on_corpse).
+            add_cfg_choice(special, "Switch Search", "switch_found", array("random", "2nd", "3rd", "4th"));
+            if(!get_cfg_int("switch_found"))
+                add_cfg_toggle(special, "1% Bodies", "percent_bodies");
+            add_cfg_toggle(special, "Max After Round Infinity", "infinity_max");
 
-        maze = add_submenu(settings, "maze", "Maze Switches", "Maze");
+        maze = add_submenu(settings, "maze", "Switches");
             add_cfg_choice(maze, "Layout", "maze_layout", array("random", "1", "2", "3", "4", "5", "6"));
-            for(i = 1; i <= MAZE_SWITCHES; i++)
-                add_cfg_choice(maze, "Switch " + i + " Side", "switch_side_" + i, array("random", "N / W", "S / E"));
-            for(i = 1; i <= MAZE_SWITCHES; i++)
-                add_cfg_choice(maze, "Switch " + i + " Order", "switch_order_" + i, array("random", "1st", "2nd", "3rd", "4th"));
+            colors = buriedfullgame_switch_colors();
+            labels = array("Red", "Green", "Blue", "Yellow");
+            for(i = 0; i < colors.size; i++)
+                add_cfg_choice(maze, labels[i] + " Side", "switch_side_" + colors[i], array("random", "N / W", "S / E"));
+            for(i = 0; i < colors.size; i++)
+                add_cfg_choice(maze, labels[i] + " Order", "switch_order_" + colors[i], array("random", "1st", "2nd", "3rd", "4th"));
+
+        wisp = add_submenu(settings, "wisp", "Signs & Wisp", "Wisp");
+            buried_sign_menu(wisp);
+            add_cfg_toggle(wisp, "Maxis Lantern Teleports", "lantern_teleports");
+            buried_fork_menu(wisp);
+
+        bells = add_submenu(settings, "bells", "Maxis Bells", "Bells");
+            lights = buriedfullgame_bell_labels();
+            for(i = 1; i <= BELLS; i++)
+                buriedfullgame_add_choice(bells, "Bell " + i, "bell_" + i, lights);
 }
 
 // add_cfg_choice for a list that is only known at run time: a saved value past
@@ -111,106 +149,129 @@ buriedfullgame_add_choice(menu, label, key, names)
 /*##############################################################################
                               Mystery Box
 ##############################################################################*/
-// Guns the Buried box can give (zm_buried include_weapons entries in the box),
-// for the Hit settings. The saved value is the index, 0 is random.
-buriedfullgame_box_hit_options()
+// The route's guns, in row order: cfg key, box weapon, menu label. The setting is
+// the hit (1-8) on the first box that gives the gun.
+buriedfullgame_box_guns()
 {
-    options = spawnstruct();
-    options.weapons = [];
-    options.labels = [];
-    buriedfullgame_add_option(options, "", "random");
-    buriedfullgame_add_option(options, "slowgun_zm", "Paralyzer");
-    buriedfullgame_add_option(options, "time_bomb_zm", "Time Bomb");
-    buriedfullgame_add_option(options, "knife_ballistic_zm", "Ballistic Knife");
-    buriedfullgame_add_option(options, "ray_gun_zm", "Ray Gun");
-    buriedfullgame_add_option(options, "raygun_mark2_zm", "Ray Gun Mark II");
-    buriedfullgame_add_option(options, "cymbal_monkey_zm", "Monkey Bombs");
-    buriedfullgame_add_option(options, "m32_zm", "War Machine");
-    buriedfullgame_add_option(options, "usrpg_zm", "RPG");
-    buriedfullgame_add_option(options, "hamr_zm", "HAMR");
-    buriedfullgame_add_option(options, "tar21_zm", "MTAR");
-    buriedfullgame_add_option(options, "galil_zm", "Galil");
-    buriedfullgame_add_option(options, "saritch_zm", "SMR");
-    buriedfullgame_add_option(options, "fnfal_zm", "FAL");
-    buriedfullgame_add_option(options, "srm1216_zm", "M1216");
-    buriedfullgame_add_option(options, "saiga12_zm", "S12");
-    buriedfullgame_add_option(options, "dsr50_zm", "DSR 50");
-    buriedfullgame_add_option(options, "barretm82_zm", "Barrett M82A1");
-    buriedfullgame_add_option(options, "rnma_zm", "Remington");
-    buriedfullgame_add_option(options, "judge_zm", "Executioner");
-    buriedfullgame_add_option(options, "kard_zm", "KAP-40");
-    buriedfullgame_add_option(options, "fiveseven_zm", "Five-seven");
-    buriedfullgame_add_option(options, "fivesevendw_zm", "Five-seven DW");
-    return options;
+    guns = spawnstruct();
+    guns.keys = array("box_paralyzer", "box_time_bomb", "box_knife");
+    guns.weapons = array("slowgun_zm", "time_bomb_zm", "knife_ballistic_zm");
+    guns.labels = array("Paralyzer", "Time Bomb", "Ballistic Knife");
+    return guns;
 }
 
-buriedfullgame_add_option(options, value, label)
+// Hit number to gun. A gun set on a hit an earlier row took goes on the next free hit.
+buriedfullgame_box_schedule()
 {
-    options.weapons[options.weapons.size] = value;
-    options.labels[options.labels.size] = label;
+    guns = buriedfullgame_box_guns();
+    schedule = [];
+    for(i = 0; i < guns.keys.size; i++)
+    {
+        hit = get_cfg_int(guns.keys[i]);
+        while(isdefined(schedule[hit]))
+            hit = hit % BOX_LAST_HIT + 1;
+        schedule[hit] = guns.weapons[i];
+    }
+    return schedule;
 }
 
-// As O-Prac's Hit 1/Hit 2: vanilla treasure_chest_chooseweightedrandomweapon
-// calls this once per box hit with the shuffled weapon list and gives the first
-// weapon in it the player can receive. On the first three hits the chosen gun
-// goes to the front. If the player cannot receive it (owned, limit reached), the
-// box picks randomly as usual.
+// Menu action: the next hit no other gun holds, so two rows never show the same hit.
+buriedfullgame_box_hit_next(key)
+{
+    hit = get_cfg_int(key);
+    for(i = 0; i < BOX_LAST_HIT; i++)
+    {
+        hit = hit % BOX_LAST_HIT + 1;
+        if(!buriedfullgame_box_hit_taken(key, hit)) break;
+    }
+    self cfg_set_int(key, hit);
+}
+
+buriedfullgame_box_hit_taken(key, hit)
+{
+    guns = buriedfullgame_box_guns();
+    foreach(other in guns.keys)
+        if(other != key && get_cfg_int(other) == hit) return true;
+    return false;
+}
+
+// The gun due on this hit, or undefined.
+buriedfullgame_box_gun_due()
+{
+    schedule = buriedfullgame_box_schedule();
+    return schedule[victis_box_hit()];
+}
+
+// As O-Prac's Hit 1/Hit 2: vanilla treasure_chest_chooseweightedrandomweapon gives
+// the first weapon in this list the player can receive, so the gun due goes to the
+// front. If the player cannot receive it (owned, limit reached), the box picks
+// randomly as usual.
 buriedfullgame_box_hit_weights(keys)
 {
-    level.buriedfullgame_box_hits++;
-    if(level.buriedfullgame_box_hits > BOX_HITS) return keys;
-
-    choice = get_cfg_int("box_hit_" + level.buriedfullgame_box_hits);
-    options = buriedfullgame_box_hit_options();
-    if(choice <= 0 || choice >= options.weapons.size) return keys;
+    gun = buriedfullgame_box_gun_due();
+    if(!isdefined(gun)) return keys;
 
     forced = [];
-    forced[0] = options.weapons[choice];
+    forced[0] = gun;
     foreach(key in keys) forced[forced.size] = key;
     return forced;
+}
+
+// Vanilla's box never moves in the first 4 hits. The first box stays until the last
+// gun's hit is over, however late that is.
+buriedfullgame_box_joker_chance(chance_of_joker)
+{
+    last = 0;
+    foreach(hit in getarraykeys(buriedfullgame_box_schedule()))
+        if(hit > last) last = hit;
+    if(level.chest_moves == 0 && level.chest_accessed < last) return -1;
+    return chance_of_joker;
 }
 
 /*##############################################################################
                               First ghost round perk
 ##############################################################################*/
-// Perks with a machine on Buried (zm_buried perk dialogue list).
-buriedfullgame_perk_options()
-{
-    options = spawnstruct();
-    options.weapons = [];
-    options.labels = [];
-    buriedfullgame_add_option(options, "", "random");
-    buriedfullgame_add_option(options, "specialty_armorvest", "Juggernog");
-    buriedfullgame_add_option(options, "specialty_quickrevive", "Quick Revive");
-    buriedfullgame_add_option(options, "specialty_fastreload", "Speed Cola");
-    buriedfullgame_add_option(options, "specialty_rof", "Double Tap");
-    buriedfullgame_add_option(options, "specialty_longersprint", "Stamin-Up");
-    buriedfullgame_add_option(options, "specialty_additionalprimaryweapon", "Mule Kick");
-    buriedfullgame_add_option(options, "specialty_nomotionsensor", "Vulture Aid");
-    return options;
-}
-
-// The chosen perk for this player, or undefined for vanilla's random pick (no
-// choice, owned, paused or no machine on the map).
+// Ghost Vulture yes: Vulture Aid. No: a random perk that is never Vulture Aid, the
+// way to practice the TROFA perk. Returns the perk, as give_random_perk does.
 buriedfullgame_ghost_perk()
 {
-    options = buriedfullgame_perk_options();
-    choice = get_cfg_int("ghost_perk");
-    if(choice <= 0 || choice >= options.weapons.size) return undefined;
+    if(get_cfg_int("ghost_vulture"))
+    {
+        if(!self buriedfullgame_can_get_perk(VULTURE_AID)) return self maps\mp\zombies\_zm_perks::give_random_perk();
+        self maps\mp\zombies\_zm_perks::give_perk(VULTURE_AID);
+        return VULTURE_AID;
+    }
 
-    perk = options.weapons[choice];
-    if(self hasperk(perk) || self maps\mp\zombies\_zm_perks::has_perk_paused(perk)) return undefined;
-    if(isdefined(self.perk_purchased) && self.perk_purchased == perk) return undefined;
+    perks = [];
     foreach(machine in getentarray("zombie_vending", "targetname"))
-        if(machine.script_noteworthy == perk) return perk;
-    return undefined;
+    {
+        perk = machine.script_noteworthy;
+        if(perk != "specialty_weapupgrade" && perk != VULTURE_AID && self buriedfullgame_can_get_perk(perk))
+            perks[perks.size] = perk;
+    }
+    if(!perks.size)
+    {
+        self playsoundtoplayer(level.zmb_laugh_alias, self);
+        return undefined;
+    }
+
+    perks = array_randomize(perks);
+    self maps\mp\zombies\_zm_perks::give_perk(perks[0]);
+    return perks[0];
+}
+
+// Vanilla give_random_perk's rule.
+buriedfullgame_can_get_perk(perk)
+{
+    if(isdefined(self.perk_purchased) && self.perk_purchased == perk) return false;
+    return !self hasperk(perk) && !self maps\mp\zombies\_zm_perks::has_perk_paused(perk);
 }
 
 // OVERRIDE: maps\mp\zombies\_zm_powerups::free_perk_powerup
 buriedfullgame_free_perk_powerup( item )
 {
     //MODIFIED: the first ghost round's perk (vanilla end_ghost_round marks it
-    // ghost_powerup) is the 1st ghost round perk setting.
+    // ghost_powerup) follows the Ghost Vulture setting.
     first_ghost_perk = 0;
 
     if ( isdefined( item.ghost_powerup ) )
@@ -235,14 +296,9 @@ buriedfullgame_free_perk_powerup( item )
                 player notify( "player_received_ghost_round_free_perk" );
             }
 
-            //MODIFIED: chosen perk
-            free_perk = undefined;
-
+            //MODIFIED: Ghost Vulture
             if ( first_ghost_perk )
                 free_perk = player buriedfullgame_ghost_perk();
-
-            if ( isdefined( free_perk ) )
-                player maps\mp\zombies\_zm_perks::give_perk( free_perk );
             else
                 free_perk = player maps\mp\zombies\_zm_perks::give_random_perk();
             //MODIFIED END
@@ -332,12 +388,12 @@ buriedfullgame_item_is_on_corpse()
     if ( !isdefined( level.sq_tpo.times_searched ) )
         level.sq_tpo.times_searched = 0;
 
-    //MODIFIED: the switch is on the chosen search.
-    choice = get_cfg_int( "switch_search" );
+    //MODIFIED: the switch is on the chosen search (1 is the 2nd).
+    choice = get_cfg_int( "switch_found" );
 
     if ( choice > 0 )
     {
-        b_found_item = level.sq_tpo.times_searched + 1 == choice && !flag( "sq_tpo_found_item" );
+        b_found_item = level.sq_tpo.times_searched == choice && !flag( "sq_tpo_found_item" );
         level.sq_tpo.times_searched++;
         return b_found_item;
     }
@@ -360,49 +416,25 @@ buriedfullgame_item_is_on_corpse()
     }
 
     b_found_item = randomint( 100 ) > 100 - n_chance && !flag( "sq_tpo_found_item" );
+
+    //MODIFIED: 1% Bodies off: the last search always finds it.
+    if ( level.sq_tpo.times_searched == 3 && !get_cfg_int( "percent_bodies" ) && !flag( "sq_tpo_found_item" ) )
+        b_found_item = 1;
+    //MODIFIED END
+
     level.sq_tpo.times_searched++;
     return b_found_item;
 }
 
-// Powerups Buried drops from zombies (zm_buried include_powerups).
-buriedfullgame_drop_options()
-{
-    options = spawnstruct();
-    options.weapons = [];
-    options.labels = [];
-    buriedfullgame_add_option(options, "", "random");
-    buriedfullgame_add_option(options, "full_ammo", "Max Ammo");
-    buriedfullgame_add_option(options, "insta_kill", "Insta-Kill");
-    buriedfullgame_add_option(options, "double_points", "Double Points");
-    buriedfullgame_add_option(options, "nuke", "Nuke");
-    buriedfullgame_add_option(options, "fire_sale", "Fire Sale");
-    buriedfullgame_add_option(options, "carpenter", "Carpenter");
-    return options;
-}
-
-// After each Infinity round (special_round_end has restored the time bomb's
-// saved data by then), the next drop of the powerup cycle is the chosen one: it
-// swaps places with whatever was next, as O-Prac's nuke swap.
-buriedfullgame_special_round_drop()
+// Max After Round Infinity: the Max Ammo waits at the end of the drop cycle (victis.gsc)
+// and is the next drop once the time bomb has brought the player back, after each
+// Infinity round until one finds the switch.
+buriedfullgame_infinity_max()
 {
     while(true)
     {
         level waittill("sq_tpo_special_round_ended");
-        options = buriedfullgame_drop_options();
-        choice = get_cfg_int("special_round_drop");
-        if(choice <= 0 || choice >= options.weapons.size) continue;
-
-        powerup = options.weapons[choice];
-        next = level.zombie_powerup_index;
-        if(next >= level.zombie_powerup_array.size) next = 0;
-        for(i = 0; i < level.zombie_powerup_array.size; i++)
-        {
-            if(level.zombie_powerup_array[i] != powerup) continue;
-            level.zombie_powerup_array[i] = level.zombie_powerup_array[next];
-            level.zombie_powerup_array[next] = powerup;
-            println("B-Prac: next drop " + powerup);
-            break;
-        }
+        victis_max_release(flag("sq_tpo_found_item"));
     }
 }
 
@@ -413,7 +445,22 @@ buriedfullgame_special_round_drop()
 // the n-th blocker of the maze's active layout (a lever with no wall in the
 // layout stays at its own struct). Each maze change re-places the levers and
 // rolls their side, a wrong attempt resets them, the solution order is rolled
-// once when the step starts.
+// once when the step starts. Settings go by colour, the lever's model (struct
+// order is blue, green, red, yellow, logged live 2026-11-05).
+
+// In menu order.
+buriedfullgame_switch_colors()
+{
+    return array("red", "green", "blue", "yellow");
+}
+
+// The colour of a lever model ("p6_zm_bu_maze_switch_red").
+buriedfullgame_switch_color(model)
+{
+    foreach(color in buriedfullgame_switch_colors())
+        if(issubstr(model, color)) return color;
+    return "red";
+}
 
 // Vanilla init_maze_permutations layouts, in its order (layout 1 is the first).
 buriedfullgame_maze_layouts()
@@ -434,12 +481,12 @@ buriedfullgame_lock_maze()
     level._maze._cur_perm = 0;
 }
 
-// is_flip for lever n_index on a wall whose right vector is v_right. Side
+// is_flip for the lever of that colour on a wall whose right vector is v_right. Side
 // N / W puts the lever on the north face of an east-west wall or the west face
 // of a north-south wall (north = +y, east = +x, to confirm in game).
-buriedfullgame_lever_flip(n_index, v_right)
+buriedfullgame_lever_flip(color, v_right)
 {
-    side = get_cfg_int("switch_side_" + (n_index + 1));
+    side = get_cfg_int("switch_side_" + color);
     if(side != SIDE_NORTH_WEST && side != SIDE_SOUTH_EAST) return randomint(2);
 
     if(v_right[1] * v_right[1] >= v_right[0] * v_right[0])
@@ -458,9 +505,8 @@ buriedfullgame_sq_ml_spawn_lever( n_index )
     m_lever = spawn( "script_model", ( 0, 0, 0 ) );
     m_lever setmodel( self.model );
     m_lever.targetname = "sq_ml_lever";
-    //MODIFIED: the lever keeps its number for the Switch settings (getentarray
-    // order is not the struct order).
-    m_lever.buriedfullgame_index = n_index;
+    //MODIFIED: the lever keeps its colour for the Switches settings.
+    m_lever.buriedfullgame_color = buriedfullgame_switch_color( self.model );
     //MODIFIED END
 
     while ( true )
@@ -473,7 +519,7 @@ buriedfullgame_sq_ml_spawn_lever( n_index )
             s_spot = getstruct( level._maze._active_perm_list[n_index], "script_noteworthy" );
             v_right = anglestoright( s_spot.angles );
             //MODIFIED: Switch side setting.
-            is_flip = buriedfullgame_lever_flip( n_index, v_right );
+            is_flip = buriedfullgame_lever_flip( m_lever.buriedfullgame_color, v_right );
             //MODIFIED END
             v_offset = vectornormalize( v_right ) * 2;
 
@@ -486,7 +532,7 @@ buriedfullgame_sq_ml_spawn_lever( n_index )
             if ( is_flip )
                 v_angles = s_spot.angles - vectorscale( ( 0, 1, 0 ), 90.0 );
 
-            println( "B-Prac: switch " + ( n_index + 1 ) + " on " + level._maze._active_perm_list[n_index] + " at " + v_spot + " flip " + is_flip );
+            println( "B-Prac: " + m_lever.buriedfullgame_color + " switch on " + level._maze._active_perm_list[n_index] + " at " + v_spot + " flip " + is_flip );
         }
 
         m_lever.origin = v_spot;
@@ -495,9 +541,9 @@ buriedfullgame_sq_ml_spawn_lever( n_index )
     }
 }
 
-// Solution order: lever with Switch n flipped = k is the k-th to flip. Set
-// values are kept unless two switches claim the same place (the later one goes
-// random), the rest take the free places at random.
+// Solution order: a lever whose Order setting is k is the k-th to flip. Set values
+// are kept unless two switches claim the same place (the later one goes random), the
+// rest take the free places at random.
 buriedfullgame_set_lever_order(a_levers)
 {
     n = a_levers.size;
@@ -505,9 +551,7 @@ buriedfullgame_set_lever_order(a_levers)
     order = [];
     for(i = 0; i < n; i++)
     {
-        index = i;
-        if(isdefined(a_levers[i].buriedfullgame_index)) index = a_levers[i].buriedfullgame_index;
-        c = get_cfg_int("switch_order_" + (index + 1)) - 1;
+        c = get_cfg_int("switch_order_" + a_levers[i].buriedfullgame_color) - 1;
         if(c >= 0 && c < n && !isdefined(taken[c]))
         {
             order[i] = c;
@@ -529,9 +573,7 @@ buriedfullgame_set_lever_order(a_levers)
             next++;
         }
         a_levers[i].n_lever_order = order[i];
-        index = i;
-        if(isdefined(a_levers[i].buriedfullgame_index)) index = a_levers[i].buriedfullgame_index;
-        println("B-Prac: switch " + (index + 1) + " is flipped " + (order[i] + 1));
+        println("B-Prac: " + a_levers[i].buriedfullgame_color + " switch is flipped " + (order[i] + 1));
     }
 }
 
@@ -540,7 +582,7 @@ buriedfullgame_sq_ml_puzzle_logic()
 {
     a_levers = getentarray( "sq_ml_lever", "targetname" );
     level.sq_ml_curr_lever = 0;
-    //MODIFIED: Switch flipped settings instead of array_randomize.
+    //MODIFIED: Order settings instead of array_randomize.
     buriedfullgame_set_lever_order( a_levers );
     //MODIFIED END
 
@@ -566,6 +608,108 @@ buriedfullgame_sq_ml_puzzle_logic()
         level waittill( "zm_buried_maze_changed" );
         level notify( "sq_ml_reset_levers" );
         wait 1;
+    }
+}
+
+/*##############################################################################
+                              Maxis bells
+##############################################################################*/
+// Bell n is the n-th button the board asks for. The saved value is the light number
+// (the struct's light_0n), 0 random. A light set on an earlier row counts as random.
+// The label is the light and the zone of its button.
+buriedfullgame_bell_labels()
+{
+    if(isdefined(level.buriedfullgame_bell_labels)) return level.buriedfullgame_bell_labels;
+
+    labels = array("random");
+    for(i = 1; i <= BELLS; i++)
+        labels[i] = "" + i;
+    foreach(button in getstructarray("sq_bp_button", "targetname"))
+    {
+        n = int(getsubstr(button.script_string, 6, button.script_string.size));
+        zone = maps\mp\zombies\_zm_zonemgr::get_zone_from_position(button.origin + (0, 0, 32), 1);
+        if(isdefined(zone)) labels[n] = n + " " + basegame_plain_zone_name(zone);
+    }
+    if(isdefined(level.zones)) level.buriedfullgame_bell_labels = labels;
+    return labels;
+}
+
+// a_tags in the order of the Bell rows, the rest shuffled into the free places.
+buriedfullgame_bell_order(a_tags)
+{
+    used = [];
+    order = [];
+    for(i = 1; i <= BELLS; i++)
+    {
+        light = get_cfg_int("bell_" + i);
+        if(!light) continue;
+        tag = "light_0" + light;
+        if(isdefined(used[tag])) continue;
+        used[tag] = true;
+        order[i - 1] = tag;
+    }
+
+    rest = [];
+    foreach(tag in a_tags)
+        if(!isdefined(used[tag])) rest[rest.size] = tag;
+    rest = array_randomize(rest);
+
+    result = [];
+    next = 0;
+    for(i = 0; i < a_tags.size; i++)
+    {
+        if(isdefined(order[i]))
+        {
+            result[i] = order[i];
+            continue;
+        }
+        result[i] = rest[next];
+        next++;
+    }
+    return result;
+}
+
+// OVERRIDE: maps\mp\zm_buried_sq_ip::sq_bp_start_puzzle_lights
+buriedfullgame_sq_bp_start_puzzle_lights()
+{
+    level endon( "sq_bp_wrong_button" );
+    level endon( "sq_bp_timeout" );
+    a_button_structs = getstructarray( "sq_bp_button", "targetname" );
+    a_tags = [];
+
+    foreach ( m_button in a_button_structs )
+        a_tags[a_tags.size] = m_button.script_string;
+
+    //MODIFIED: Bell rows instead of array_randomize.
+    a_tags = buriedfullgame_bell_order( a_tags );
+    //MODIFIED END
+    m_lightboard = getent( "sq_bp_board", "targetname" );
+
+    if ( !isdefined( level.t_start ) )
+        level.t_start = spawn( "trigger_radius_use", m_lightboard.origin, 0, 16, 16 );
+
+    level.t_start setcursorhint( "HINT_NOICON" );
+    level.t_start sethintstring( &"ZM_BURIED_SQ_SWIT_U" );
+    level.t_start triggerignoreteam();
+    level.t_start usetriggerrequirelookat();
+    level.t_start waittill( "trigger" );
+    level.t_start delete();
+
+    foreach ( str_tag in a_tags )
+    {
+        wait_network_frame();
+        wait_network_frame();
+        level thread maps\mp\zm_buried_sq_ip::sq_bp_set_current_bulb( str_tag );
+        level waittill( "sq_bp_correct_button" );
+    }
+
+    flag_set( "sq_ip_puzzle_complete" );
+    a_button_structs = getstructarray( "sq_bp_button", "targetname" );
+
+    foreach ( s_button in a_button_structs )
+    {
+        if ( isdefined( s_button.trig ) )
+            s_button.trig delete();
     }
 }
 
