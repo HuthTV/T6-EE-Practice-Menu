@@ -14,7 +14,7 @@
 /*##############################################################################
                               Post-Ice
 ##############################################################################*/
-// The Ice staff is crafted and in hand, round 10 is under way with "Zombies killed"
+// The Ice staff is crafted and in hand, round 11 is under way with "Zombies killed"
 // zombies already down, and the round's generator zombies are gone (every generator
 // is captured, none under attack). The gramophone stands at the Fire tunnel with its
 // portal open. By Start Location (start_loc): the player starts in the tunnel
@@ -57,9 +57,9 @@ postice_initialize()
     no_staffs = [];
     shared_staff_install(no_staffs);
     shared_held_start_install();
-    // Round 10's Templars are dealt with (user, 2026-11-02): Templar II comes
-    // Templar II's gap after round 10 (13, 14 or 15).
-    shared_schedule_advance(level.templar_schedule, 10);
+    // Round 11's Templars are dealt with (user, 2026-11-02, round 11 since 2026-11-23):
+    // Templar II comes Templar II's gap after round 11 (14, 15 or 16).
+    shared_schedule_advance(level.templar_schedule, 11);
 }
 
 // level.start_time_choices: each location has its own time.
@@ -76,7 +76,7 @@ postice_segment()
     // The Ice split is behind: the run clock starts in the portal on the Start
     // Time, and the next split is the Wind craft.
     segment.split = SPLIT_WIND;
-    segment.round = 10;
+    segment.round = 11; // user, 2026-11-23 (was 10)
     segment.round_kills = postice_kills();
     segment.use_exit = get_cfg_int("start_loc") == POSTICE_LOC_EXIT;
     // Every dial turned to Ice (user, 2026-11-02), the first left as scrambled with Skip First Disc.
@@ -95,7 +95,7 @@ postice_segment()
     return segment;
 }
 
-// Zombies killed in round 10 so far, kept within 0 and POSTICE_KILLS_MAX.
+// Zombies killed in round 11 so far, kept within 0 and POSTICE_KILLS_MAX.
 postice_kills()
 {
     kills = get_cfg_int("icecode_kills");
@@ -130,7 +130,7 @@ postice_setup()
 
     self shared_portals_wait();
     level.segment.spots = postice_spots();
-    self.kills = 205 + randomint(26) + postice_kills();
+    self.kills = 205 + randomint(26) + 1 + postice_kills(); // Pre-Ice's base (round 10 bar 1), its last zombie, round 11's kills
 }
 
 // Crazy Place ceiling tiles all flipped back to the stone side, which completes
@@ -173,10 +173,10 @@ postice_build_menu(root)
     settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
         shared_add_location_choice(settings, "start_loc", array(POSTICE_LOC_ENTER, POSTICE_LOC_EXIT), array("code enter", "code exit"));
         self shared_start_time_menu(settings);
-        create_option(settings, "Zombies Killed: ^3" + postice_kills() + " ^7(of " + practice_round_zombie_count(10) + ")", ::cfg_increment_int, "icecode_kills", array(0, POSTICE_KILLS_MAX));
+        create_option(settings, "Zombies Killed: ^3" + postice_kills() + " ^7(of " + practice_round_zombie_count(11) + ")", ::cfg_increment_int, "icecode_kills", array(0, POSTICE_KILLS_MAX));
         add_cfg_toggle(settings, "R2L Route", "r2l");
         // Cycle 1 Foot picks the second bunker door: only R2L has a choice.
-        if(get_cfg_int("r2l")) add_cfg_choice(settings, "Cycle 1 Foot", "trench_path", array("random", "gen 2", "gen 3"));
+        if(get_cfg_int("r2l")) add_cfg_choice(settings, "Cycle 1 Foot", "trench_path", array("random", "Gen 2", "Gen 3"));
 
     self shared_build_categories(root);
     self shared_boomhilda_menu("loadout");
@@ -193,7 +193,7 @@ postice_default_cfg()
     settings_ar = [];
 
     settings_ar["start_loc"] = POSTICE_LOC_ENTER; // POSTICE_LOC_*
-    settings_ar["icecode_kills"] = 0;                // Round 10 zombies killed so far (0 to POSTICE_KILLS_MAX).
+    settings_ar["icecode_kills"] = 0;                // Round 11 zombies killed so far (0 to POSTICE_KILLS_MAX).
     settings_ar = shared_boomhilda_defaults(settings_ar);
     settings_ar["dt_start"] = 0;
     settings_ar["trench_path"] = 0; // 0 random, 1 gen2, 2 gen3

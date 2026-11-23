@@ -18,9 +18,18 @@
 // the settings, not from a fixed route (user, 2026-11-02), and everything after
 // the start stays native, so the run can be played on to Freedom (splits Ice to
 // Freedom). Was Panzer Practice (panzprac), an open-doors drill.
-//   Start box    the first box of the run, always full (generally Gen 5 or Mound)
-//   Box souls    every other box: 0 to 29 souls, or full
-//   Spawn box    where the player is released, facing that box
+// Start Location (user, 2026-11-23, start_loc), each with its own saved settings
+// (keys end in the location id, panzerstart_key): the run's box fills by then.
+//   Gen 4            Mound and Gen 5 full, Gen 4 5-10 souls, church 1-5
+//   Gen 5            Mound and Gen 5 full, church 1-5, Gen 4 empty (guess)
+//   Mound            Gen 4 and Gen 5 full, church 1-5, Mound 5-10 (guess)
+//   Fast 4 Box       Mound and Gen 4 full, church 10-20, Gen 5 empty. Robots
+//                    Thor, Thor, Freya, Odin, Freya walked, round 8 starts after
+//                    leaving Odin at Gen 5 (release spot a placeholder at the Gen 5
+//                    box until the user checks footage)
+//   Fast 4 Box v2    as Fast 4 Box with the church and Gen 4 fills swapped
+// A ranged box row is a fixed count or random within its range. Every location's
+// last walked robot is Freya, so the next single cycle is Odin or Thor.
 //   Early Gram   mound open with the gramophone in hand, or left at the mound
 // Kept from Panzer Practice: every door open, perks by spawn box, 10000 points,
 // claymore, Hud Info. Not set up: generators, staff parts, plane, tank, tablet,
@@ -40,13 +49,21 @@
 #define PANZERSTART_SPOT_MOUND        (540, 795, 83)
 #define PANZERSTART_BOX_SOULS  30     // vanilla box_footprint_think, also "full" in the box settings
 #define PANZERSTART_ROUND      8
+#define PANZERSTART_SOULS_RANDOM  -1  // a ranged box row: random within its range
+
+// Start Location (start_loc), the order of panzerstart_loc_ids.
+#define PANZERSTART_LOC_GEN4   0
+#define PANZERSTART_LOC_GEN5   1
+#define PANZERSTART_LOC_MOUND  2
+#define PANZERSTART_LOC_FAST4  3
+#define PANZERSTART_LOC_FAST4B 4
 #define PANZERSTART_SCORE      10000  // Panzer Practice's points
 
 panzerstart_initialize()
 {
     // Start time presets: 9:00 to 11:00, every 5 seconds, 10:00 by default. A
     // guess at the run clock at the start of round 8.
-    shared_start_time_add("release", "release", "Release", "9:00", "11:00", 5, "10:00");
+    shared_start_time_add("release", "release", "release", "9:00", "11:00", 5, "10:00");
     puzzle_rng_install(PUZZLE_RNG_ICE);
     level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();
     mode_cfg_load("panzerstart", panzerstart_default_cfg());
@@ -70,15 +87,15 @@ panzerstart_segment()
     segment.excluded_doors = undefined; // Every door open, as Panzer Practice.
     segment.generators = undefined;     // None captured.
     segment.tablet = undefined;         // Left where the map puts it.
-    segment.leave_gramophone = !get_cfg_int("early_gram");
+    segment.leave_gramophone = !get_cfg_int(panzerstart_key("early_gram"));
+    segment.robot_last = ROBOT_FREYA;   // the next single cycle is Odin or Thor (user, 2026-11-23)
     segment.box_rewards = false;        // panzerstart_soul_boxes fills the boxes natively instead.
     segment.tank_trips = 0;
     segment.kill_plane = false;
     segment.claymore = get_cfg_int("clay");
     segment.perks = panzerstart_perks();
     segment.score = PANZERSTART_SCORE;
-    // The spawn box spot is set by panzerstart_setup: the church box is only
-    // known at run time.
+    // The spawn spot is set by panzerstart_setup from the location.
     segment.use_exit = false;
     segment.setup = ::panzerstart_setup;
     return segment;
@@ -86,7 +103,7 @@ panzerstart_segment()
 
 panzerstart_setup()
 {
-    spawn = panzerstart_boxes()[panzerstart_box_index("spawn_box")];
+    spawn = panzerstart_boxes()[panzerstart_spawn_box()];
     level.segment.spots = shared_start_spots(spawn.spot, spawn.angles, spawn.spot, spawn.angles);
     self panzerstart_get_parts();
     self panzerstart_soul_boxes();
@@ -104,10 +121,10 @@ panzerstart_get_parts()
 }
 
 // Panzer Practice's perks per box it started at: Stamin-Up at Gen 4, Jugg at
-// Gen 5, both at the Mound. The church box (new) gets both too.
+// Gen 5 (Fast 4 Box too, released there), both at the Mound.
 panzerstart_perks()
 {
-    switch(get_cfg_int("spawn_box"))
+    switch(panzerstart_spawn_box())
     {
         case 0:  return array("specialty_longersprint");
         case 1:  return array("specialty_armorvest");
@@ -163,13 +180,99 @@ panzerstart_box_entry(key, label, origin, spot)
     return box;
 }
 
-// A box setting's index, within the boxes found.
-panzerstart_box_index(key)
+/*##############################################################################
+                              Start Location
+##############################################################################*/
+panzerstart_loc_ids()
 {
-    index = get_cfg_int(key);
-    size = panzerstart_boxes().size;
-    if(index >= size) index = size - 1;
-    return index;
+    return array("gen4", "gen5", "mound", "fast4", "fast4b");
+}
+
+panzerstart_loc_labels()
+{
+    return array("Gen 4", "Gen 5", "Mound", "fast 4 box", "fast 4 box v2");
+}
+
+panzerstart_loc()
+{
+    loc = get_cfg_int("start_loc");
+    if(loc < 0 || loc >= panzerstart_loc_ids().size) loc = PANZERSTART_LOC_GEN4;
+    return loc;
+}
+
+// A per-location setting's key: name plus the location id.
+panzerstart_key(name, loc)
+{
+    if(!isdefined(loc)) loc = panzerstart_loc();
+    return name + "_" + panzerstart_loc_ids()[loc];
+}
+
+// The box (index into panzerstart_boxes) the player is released at, facing it.
+panzerstart_spawn_box(loc)
+{
+    if(!isdefined(loc)) loc = panzerstart_loc();
+    if(loc == PANZERSTART_LOC_GEN4) return 0;
+    if(loc == PANZERSTART_LOC_MOUND) return 2;
+    return 1; // Gen 5, and Fast 4 Box's placeholder at the Gen 5 box
+}
+
+// (lo, hi) souls of box i (0 Gen 4, 1 Gen 5, 2 Mound, 3 Church) at a location.
+// lo == hi is a fixed fill (PANZERSTART_BOX_SOULS full, 0 untouched), else a row.
+panzerstart_box_range(loc, i)
+{
+    full = PANZERSTART_BOX_SOULS;
+    if(loc == PANZERSTART_LOC_GEN4) ranges = array(array(5, 10), array(full, full), array(full, full), array(1, 5));
+    else if(loc == PANZERSTART_LOC_GEN5) ranges = array(array(0, 0), array(full, full), array(full, full), array(1, 5));
+    else if(loc == PANZERSTART_LOC_MOUND) ranges = array(array(full, full), array(full, full), array(5, 10), array(1, 5));
+    else if(loc == PANZERSTART_LOC_FAST4) ranges = array(array(full, full), array(0, 0), array(full, full), array(10, 20));
+    else ranges = array(array(10, 20), array(0, 0), array(full, full), array(full, full));
+    return ranges[i];
+}
+
+// Souls box i gets at setup: the fixed fill, the row's count, or a roll within its range.
+panzerstart_box_souls(i)
+{
+    range = panzerstart_box_range(panzerstart_loc(), i);
+    if(range[0] == range[1]) return range[0];
+    souls = get_cfg_int(panzerstart_key(panzerstart_boxes()[i].key));
+    if(souls < range[0] || souls > range[1]) souls = randomintrange(range[0], range[1] + 1);
+    return souls;
+}
+
+// A ranged box row steps random, lo, ..., hi, random.
+panzerstart_souls_step(key, range)
+{
+    value = get_cfg_int(key);
+    if(value < range[0] || value > range[1]) next = range[0];
+    else if(value == range[1]) next = PANZERSTART_SOULS_RANDOM;
+    else next = value + 1;
+    self cfg_set_int(key, next);
+}
+
+panzerstart_full_box_left(boxes, souls)
+{
+    for(i = 0; i < souls.size; i++)
+        if(souls[i] >= PANZERSTART_BOX_SOULS && isdefined(boxes[i].ent)) return true;
+    return false;
+}
+
+panzerstart_souls_row_text(key, range)
+{
+    value = get_cfg_int(key);
+    if(value < range[0] || value > range[1]) return "^3random ^7(" + range[0] + "-" + range[1] + ")";
+    return "^3" + value;
+}
+
+panzerstart_fill_text(souls)
+{
+    if(souls >= PANZERSTART_BOX_SOULS) return "full";
+    if(souls <= 0) return "empty";
+    return "" + souls;
+}
+
+// The fixed fills line only lists the location's boxes.
+panzerstart_no_action()
+{
 }
 
 // The nearest path node at least 64 units from the box, else a spot above it.
@@ -181,21 +284,27 @@ panzerstart_box_node(origin)
     return origin + (0, 0, 40);
 }
 
-// The start box is filled first, so vanilla counts it as the first box done.
-// Every other box gets its souls setting: full, some souls, or untouched.
+// The full boxes first, one frame apart (vanilla counts them in that order, no
+// box's place in it is observable), then the partly filled ones.
 panzerstart_soul_boxes()
 {
     boxes = panzerstart_boxes();
-    start = panzerstart_box_index("start_box");
-    if(isdefined(boxes[start].ent)) boxes[start].ent panzerstart_fill_box(self);
-    wait 0.05;
+    souls = [];
+    for(i = 0; i < boxes.size && i < 4; i++) souls[i] = panzerstart_box_souls(i);
 
-    for(i = 0; i < boxes.size; i++)
+    for(i = 0; i < souls.size; i++)
     {
-        if(i == start || !isdefined(boxes[i].ent)) continue;
-        souls = get_cfg_int(boxes[i].key);
-        if(souls >= PANZERSTART_BOX_SOULS) boxes[i].ent panzerstart_fill_box(self);
-        else if(souls > 0) boxes[i].ent thread panzerstart_prefill_box(self, souls);
+        if(!isdefined(boxes[i].ent) || souls[i] < PANZERSTART_BOX_SOULS) continue;
+        boxes[i].ent panzerstart_fill_box(self);
+        wait 0.05;
+    }
+    // A full box finishes natively (rise, stat, Richtofen's line, deleted) about 5 s later: before the release
+    for(t = 0; t < 200 && panzerstart_full_box_left(boxes, souls); t++) wait 0.05;
+    for(i = 0; i < souls.size; i++)
+    {
+        if(!isdefined(boxes[i].ent) || souls[i] <= 0 || souls[i] >= PANZERSTART_BOX_SOULS) continue;
+        boxes[i].ent thread panzerstart_prefill_box(self, souls[i]);
+        shared_setup_trace(boxes[i].label + " box prefilled with " + souls[i] + " souls");
     }
 }
 
@@ -214,13 +323,6 @@ panzerstart_prefill_box(player, souls)
     self notify("soul_absorbed", player);
     wait 0.05;
     self.n_souls_absorbed = souls;
-}
-
-panzerstart_souls_text(key)
-{
-    souls = get_cfg_int(key);
-    if(souls >= PANZERSTART_BOX_SOULS) return "^2full";
-    return "^3" + souls;
 }
 
 /*##############################################################################
@@ -374,18 +476,30 @@ panzerstart_mechz_spawn() // OVERRIDE: maps\mp\zombies\_zm_ai_mechz::mechz_spawn
 panzerstart_build_menu(root)
 {
     boxes = panzerstart_boxes();
-    start = panzerstart_box_index("start_box");
-    spawn = panzerstart_box_index("spawn_box");
-    last = boxes.size - 1;
+    loc = panzerstart_loc();
+    ids = panzerstart_loc_ids();
+    values = [];
+    for(i = 0; i < ids.size; i++) values[i] = i;
 
     settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
+        shared_add_location_choice(settings, "start_loc", values, panzerstart_loc_labels());
         self shared_start_time_menu(settings);
-        create_option(settings, "First Box: ^3" + boxes[start].label, ::cfg_increment_int, "start_box", array(0, last));
-        create_option(settings, "Spawn Box: ^3" + boxes[spawn].label, ::cfg_increment_int, "spawn_box", array(0, last));
-        // The start box is always full, so it has no souls row.
-        for(i = 0; i < boxes.size; i++)
-            if(i != start) create_option(settings, boxes[i].label + " Souls: " + panzerstart_souls_text(boxes[i].key), ::cfg_increment_int, boxes[i].key, array(0, PANZERSTART_BOX_SOULS));
-        add_cfg_toggle(settings, "Gram", "early_gram", "^2in hand", "^3placed");
+        // Ranged boxes get a row, the fixed ones are listed on one line under them.
+        fixed = "";
+        for(i = 0; i < boxes.size && i < 4; i++)
+        {
+            range = panzerstart_box_range(loc, i);
+            if(range[0] == range[1])
+            {
+                if(fixed != "") fixed = fixed + ", ";
+                fixed = fixed + boxes[i].label + " " + panzerstart_fill_text(range[0]);
+                continue;
+            }
+            key = panzerstart_key(boxes[i].key);
+            create_option(settings, boxes[i].label + " Souls: " + panzerstart_souls_row_text(key, range), ::panzerstart_souls_step, key, range);
+        }
+        create_option(settings, "Boxes: ^3" + fixed, ::panzerstart_no_action);
+        add_cfg_toggle(settings, "Gram", panzerstart_key("early_gram"), "^2in hand", "^3placed");
 
     self shared_build_categories(root);
     add_cfg_toggle("loadout", "Claymore", "clay");
@@ -396,16 +510,21 @@ panzerstart_default_cfg()
 {
     settings_ar = [];
 
-    // Boxes: 0 Gen 4, 1 Gen 5, 2 Mound, 3 Church. Souls: 0 to 29, or
-    // PANZERSTART_BOX_SOULS for full. Defaults are Panzer Practice's setup
-    // (filling Gen 4 with 10 souls, Gen 5 and Mound full, the church box empty).
-    settings_ar["start_box"] = 1;   // First box of the run, always full.
-    settings_ar["spawn_box"] = 0;
-    settings_ar["souls_gen4"] = 10;
-    settings_ar["souls_gen5"] = PANZERSTART_BOX_SOULS;
-    settings_ar["souls_mound"] = PANZERSTART_BOX_SOULS;
-    settings_ar["souls_church"] = 0;
-    settings_ar["early_gram"] = 1;  // 1: gramophone in hand, 0: left at the mound (as Pre-Ice).
+    // Start Location (PANZERSTART_LOC_*), then per location (panzerstart_key):
+    // each ranged box's souls (PANZERSTART_SOULS_RANDOM or a count in its range,
+    // panzerstart_box_range) and Early Gram. The old start_box, spawn_box and
+    // souls_* keys from before the locations are no longer read.
+    settings_ar["start_loc"] = PANZERSTART_LOC_GEN4;
+    box_keys = array("souls_gen4", "souls_gen5", "souls_mound", "souls_church");
+    for(loc = 0; loc < panzerstart_loc_ids().size; loc++)
+    {
+        for(i = 0; i < box_keys.size; i++)
+        {
+            range = panzerstart_box_range(loc, i);
+            if(range[0] != range[1]) settings_ar[panzerstart_key(box_keys[i], loc)] = PANZERSTART_SOULS_RANDOM;
+        }
+        settings_ar[panzerstart_key("early_gram", loc)] = 1; // 1: gramophone in hand, 0: left at the mound (as Pre-Ice).
+    }
     settings_ar["clay"] = 1;
     settings_ar["hud"] = 0;         // Slowed and Panzer health rows.
     settings_ar["stg_start"] = STG_NO;

@@ -14,7 +14,7 @@
                               Pre-Wind
 ##############################################################################*/
 // Ice completed and placed with "Ice prefills" souls (0 by default). The player
-// starts on round 11 or 12 carrying the Wind crystal, with Wind uncrafted, by Start
+// starts on round 12 (user, 2026-11-23, fresh round) carrying the Wind crystal, with Wind uncrafted, by Start
 // Location (wind_spawn). Windstart was split in two on 2026-11-04 (user): the
 // locations after the craft are Post-Wind.
 //   Craft faces the Wind staff, Exit is in the Crazy Place at the Wind exit, STG is
@@ -67,8 +67,7 @@ prewind_segment()
     segment = shared_segment();
     segment.required_items = shared_required_items(array(WIND));
     segment.split = SPLIT_WIND;
-    segment.round = get_cfg_int("wind_start_round");
-    if(segment.round == 11) segment.round_zombies = 1;
+    segment.round = 12;
     segment.tank_trips = 1; // One setup trip (church to bunkers), parked at the bunker (user, 2026-11-02).
     segment.staffs = array(ICE);
     segment.gems = array(ICE, FIRE, WIND);
@@ -76,7 +75,7 @@ prewind_segment()
     segment.use_exit = get_cfg_int("wind_spawn") == PREWIND_LOC_EXIT;
     segment.panzer_spot = WIND_PANZER_SPOT;
     segment.panzer_spot_wave = 2; // Only Panzer 2, and only when it is due on the start round.
-    segment.early_teleport = segment.round == 12; // Round 12 may have the Panzer waiting.
+    segment.early_teleport = true; // Round 12 may have the Panzer waiting.
     segment.first_scramble = 2;
     if(!segment.use_exit) segment.disc_shortcut_gem = "crypt_gem_air";
     if(get_cfg_int("wind_spawn") == PREWIND_LOC_STG) shared_segment_stg(segment, CRAFT_WIND_ANGLES);
@@ -106,7 +105,6 @@ prewind_build_menu(root)
     settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
         shared_add_location_choice(settings, "wind_spawn", array(PREWIND_LOC_CRAFT, PREWIND_LOC_STG, PREWIND_LOC_EXIT), array("craft", "STG", "exit"));
         self shared_start_time_menu(settings);
-        create_option(settings, "Round: ^3" + get_cfg_int("wind_start_round"), ::cfg_increment_int, "wind_start_round", array(11, 12));
 
     self shared_build_categories(root);
     shared_add_stg_choice("loadout");
@@ -125,7 +123,6 @@ prewind_default_cfg()
 
     settings_ar["wind_spawn"] = PREWIND_LOC_EXIT; // Start Location (PREWIND_LOC_*): Exit by default (user 2026-10-20).
     settings_ar["dt_start"] = 1;
-    settings_ar["wind_start_round"] = 11;
     settings_ar["stg_start"] = STG_NO; // STG acquired: STG_NO, STG_YES or STG_PAPPED.
     settings_ar = shared_boomhilda_defaults(settings_ar);
     settings_ar["ice_souls"] = 0;  // "Ice prefills" (0 to ICE_SOULS_MAX).

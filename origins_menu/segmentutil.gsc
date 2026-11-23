@@ -1907,6 +1907,11 @@ shared_robot_cycling() // OVERRIDE: maps\mp\zm_tomb_giant_robot::robot_cycling
         level.robot_cycle = level.segment_next_robot_cycle - 1;
         three_robot_round = level.segment_three_robot_round;
 
+        // The robot of the last walked cycle, when the start knows it (segment.robot_last): a single cycle never
+        // repeats it once No Man's Land is open
+        if ( isdefined( level.segment.robot_last ) )
+            last_robot = level.segment.robot_last;
+
         if ( level.segment_robot_wait > 0 )
             wait( level.segment_robot_wait );
     }
@@ -3494,7 +3499,7 @@ shared_disc_defaults(settings_ar, first_scramble)
     return settings_ar;
 }
 
-// The Ice route's round 10 (Pre-Ice and Post-Ice). R2L: the Gen 3
+// The Ice route's round 10 (Pre-Ice) and round 11 (Post-Ice). R2L: the Gen 3
 // spawn door is open, the Gen 2 spawn door closed, and Cycle 1 Foot
 // (trench_path: 1 Gen 2, 2 Gen 3, 0 random) picks which second door is open.
 // Otherwise both Gen 3 doors are closed. The R2L route shows the AK chalk
@@ -3699,6 +3704,7 @@ shared_segment()
     segment.last_disc_aligned = false;      // true: the shortcut lines up the last dial too (no Last Disc Turn row)
     segment.discs_untouched = false;        // true: the dials keep their scrambles, no shortcut, no Skip First Disc (shared_segment_stg)
     segment.drone_option = false;           // the mode has a Maxis Drone setting (shared_drone_option)
+    segment.robot_last = undefined;         // ROBOT_*: robot of the last cycle walked before the start (shared_robot_cycling)
     segment.ice_route = false;              // shared_ice_route: Plane Part and R2L settings apply
     segment.punch_element = undefined;      // set: the upgraded Iron Fist of that element, given without its flourish
     return segment;
