@@ -320,24 +320,58 @@ shared_build_vinyls_menu(parent)
 	vinyls = add_submenu(parent, "vinyls", "Vinyl Locations", "Vinyls");
 		foreach(key in shared_vinyl_keys())
 			self shared_add_part_choice(vinyls, key);
-		create_option(vinyls, "All random", ::shared_reset_locations, shared_vinyl_keys());
+		create_option(vinyls, "All Random", ::shared_reset_locations, shared_vinyl_keys());
 }
 
-// Steps random, each spot, collected.
+// Steps random, each spot, collected. Holding frag opens the item's whitelist.
 shared_add_part_choice(menu, key)
 {
 	part = shared_part(key);
 	if(shared_item_required(key))
 	{
-		create_option(menu, part.label + ": ^2collected ^7(route)", ::shared_item_fixed);
+		create_option(menu, part.short + ": ^2collected ^7(route)", ::shared_item_fixed);
 		return;
 	}
 	if(shared_drone_crafted() && part.craftable == "equip_dieseldrone_zm")
 	{
-		create_option(menu, part.label + ": ^2in drone", ::shared_part_in_drone);
+		create_option(menu, part.short + ": ^2in drone", ::shared_part_in_drone);
 		return;
 	}
-	create_option(menu, part.label + ": ^3" + shared_part_location_text(part, get_cfg_int(key)), ::cfg_increment_int, key, array(PART_RANDOM, shared_part_collected_value(key)));
+	create_option(menu, part.short + ": ^3" + shared_part_location_text(key), ::cfg_increment_int, key, array(PART_RANDOM, shared_part_collected_value(key)));
+	self set_option_hold(menu, ::shared_open_whitelist, "WHITELIST");
+	self shared_build_whitelist_menu(menu, key);
+}
+
+// The item's whitelist page, titled with its full name: no row opens it, holding
+// frag on the item does.
+shared_build_whitelist_menu(parent, key)
+{
+	part = shared_part(key);
+	menu = "whitelist_" + key;
+	create_menu(menu, parent, part.label);
+	for(i = 0; i < part.locations.size; i++)
+	{
+		state = "^3no";
+		if(shared_whitelist_has(key, i)) state = "^2yes";
+		create_option(menu, part.locations[i] + ": " + state, ::shared_whitelist_toggle, key, i);
+	}
+}
+
+shared_open_whitelist(key, range)
+{
+	self cfg_set_int(key, PART_WHITELIST);
+	self enter_menu("whitelist_" + key);
+}
+
+shared_whitelist_toggle(key, index)
+{
+	mask = shared_whitelist_mask(key);
+	bit = shared_location_bit(index);
+	if(mask & bit) mask -= bit;
+	else mask += bit;
+	// Loaded from a saved state with the item off its whitelist: the page puts it back on.
+	if(get_cfg_int(key) != PART_WHITELIST) level.mode_cfg[key] = PART_WHITELIST;
+	self cfg_set_int(shared_whitelist_key(key), mask);
 }
 
 shared_item_fixed()

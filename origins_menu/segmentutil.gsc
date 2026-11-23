@@ -1785,6 +1785,8 @@ shared_randomize_craftable_spawns() //OVERRIDE: maps\mp\zm_tomb_craftables::rand
 		a_alt_locations = getstructarray(str_craftable + "_alt", "targetname");
 		//MODIFIED: a location setting picks the index; alt.size keeps the original spot
 		n_loc_index = shared_part_location(key);
+		if(n_loc_index == PART_WHITELIST)
+			n_loc_index = shared_whitelist_pick(key);
 		if(n_loc_index > a_alt_locations.size)
 		{
 			print("O-Prac: " + key + " has no location " + n_loc_index + " (" + (a_alt_locations.size + 1) + " locations), using random");
@@ -1884,6 +1886,13 @@ shared_generate_zombie_craftable_piece(craftablename, piecename, modelname, radi
 // defaults hold its route (segment starts: discs and Maxis parts collected), and
 // the player may change any of them, even where the route never would.
 //
+// Holding frag on an item's row opens its whitelist page (one yes/no row per spot)
+// and sets the item to PART_WHITELIST: it spawns at random among the spots set to
+// yes, saved as a bit mask in <key>_wl (bit i = spot i, default all yes). Enter
+// never steps onto the whitelist: from it, the next value is random. The mask is
+// kept while the item is on another value, so opening the page again brings it
+// back. A full whitelist is random, an empty one collected.
+//
 // Dev: the dvar oprac_force_spawn (set by tools\part_spawns.gsc) puts every part
 // and vinyl at that index, for walking the map to check the location names.
 
@@ -1911,7 +1920,79 @@ shared_part_location(key)
 	// A collected item is picked up at setup, wherever it spawned.
 	value = get_cfg_int(key);
 	if(value >= shared_part(key).locations.size) return PART_RANDOM;
+	if(value == PART_WHITELIST)
+	{
+		mask = shared_whitelist_mask(key);
+		if(mask == 0 || mask == shared_whitelist_all(key)) return PART_RANDOM;
+	}
 	return value;
+}
+
+shared_whitelist_key(key)
+{
+	return key + "_wl";
+}
+
+// Bit index of a whitelist mask.
+shared_location_bit(index)
+{
+	bit = 1;
+	for(i = 0; i < index; i++) bit *= 2;
+	return bit;
+}
+
+// The mask with every spot of the item on.
+shared_whitelist_all(key)
+{
+	return shared_location_bit(shared_part(key).locations.size) - 1;
+}
+
+shared_whitelist_mask(key)
+{
+	return get_cfg_int(shared_whitelist_key(key)) & shared_whitelist_all(key);
+}
+
+shared_whitelist_has(key, index)
+{
+	return (shared_whitelist_mask(key) & shared_location_bit(index)) != 0;
+}
+
+// The spots set to yes, in index order.
+shared_whitelist_indexes(key)
+{
+	indexes = [];
+	for(i = 0; i < shared_part(key).locations.size; i++)
+		if(shared_whitelist_has(key, i)) indexes[indexes.size] = i;
+	return indexes;
+}
+
+// The item is on its whitelist with every spot set to no.
+shared_whitelist_empty(key)
+{
+	return get_cfg_int(key) == PART_WHITELIST && shared_whitelist_mask(key) == 0;
+}
+
+// One whitelisted spot at random (vinyls).
+shared_whitelist_pick(key)
+{
+	indexes = shared_whitelist_indexes(key);
+	if(indexes.size == 0) return PART_RANDOM;
+	return indexes[randomint(indexes.size)];
+}
+
+// The whitelisted spawn structs (parts). Vanilla piece_allocate_spawn still picks
+// among them and skips a claimed one, as it does among all of them.
+shared_whitelist_spawns(key, spawns)
+{
+	kept = [];
+	foreach(index in shared_whitelist_indexes(key))
+		if(isDefined(spawns[index])) kept[kept.size] = spawns[index];
+	if(kept.size == 0)
+	{
+		print("O-Prac: " + key + " whitelist has no spawn of " + spawns.size + ", using random");
+		return spawns;
+	}
+	return kept;
 }
 
 shared_part_collected_value(key)
@@ -1955,6 +2036,7 @@ shared_item_collected(key)
 {
 	if(shared_item_required(key)) return true;
 	if(shared_drone_crafted() && (key == "maxis_body" || key == "maxis_engine")) return true;
+	if(shared_whitelist_empty(key)) return true;
 	return get_cfg_int(key) == shared_part_collected_value(key);
 }
 
@@ -1982,7 +2064,8 @@ shared_drone_crafted()
     return shared_drone_option() && get_cfg_int("maxis_drone_crafted");
 }
 
-// .locations names the locations in index order.
+// .locations names the locations in index order. .short is the row label in its
+// list, .label the title of its whitelist page (and console lines).
 // All checked in game with oprac_force_spawn on 2026-10-11 (each item seen at two
 // indexes, the third by elimination).
 shared_part(key)
@@ -1992,36 +2075,42 @@ shared_part(key)
 	{
 		case "maxis_body":
 			part.label = "Maxis Body";
+			part.short = "Body";
 			part.craftable = "equip_dieseldrone_zm";
 			part.piece = "body";
-			part.locations = array("ice tunnel", "gen 5 path", "gen 4 path");
+			part.locations = array("ice tunnel", "Gen 5 path", "Gen 4 path");
 			break;
 		case "maxis_engine":
 			part.label = "Maxis Engine";
+			part.short = "Engine";
 			part.craftable = "equip_dieseldrone_zm";
 			part.piece = "engine";
 			part.locations = array("PaP", "gram", "scaffolding");
 			break;
 		case "shield_gen2":
 			part.label = "Shield Gen 2";
+			part.short = "Gen 2";
 			part.craftable = "tomb_shield_zm";
 			part.piece = "bracket";
 			part.locations = array("claymore", "wheelbarrow", "footprint");
 			break;
 		case "shield_gen3":
 			part.label = "Shield Gen 3";
+			part.short = "Gen 3";
 			part.craftable = "tomb_shield_zm";
 			part.piece = "top";
 			part.locations = array("fire tunnel", "wheelbarrow", "AK74u");
 			break;
 		case "shield_nml":
 			part.label = "Shield NML";
+			part.short = "NML";
 			part.craftable = "tomb_shield_zm";
 			part.piece = "door";
-			part.locations = array("gen 4 box", "gen 4 side", "gen 5 side");
+			part.locations = array("Gen 4 box", "Gen 4 side", "Gen 5 side");
 			break;
 		case "vinyl_player":
-			part.label = "Gram";
+			part.label = "Gramophone";
+			part.short = "Gram";
 			part.locations = array("far", "close");
 			break;
 		case "vinyl_master":
@@ -2042,13 +2131,18 @@ shared_part(key)
 			break;
 		case "vinyl_elec":
 			part.label = "Lightning";
-			part.locations = array("fizz", "wind tunnel", "chariot");
+			part.locations = array("Fizz", "wind tunnel", "chariot");
 			break;
 	}
 	if(!isDefined(part.craftable))
 	{
 		part.craftable = "gramophone";
 		part.piece = key;
+		if(!isDefined(part.short))
+		{
+			part.short = part.label;
+			part.label += " Vinyl";
+		}
 	}
 	return part;
 }
@@ -2056,7 +2150,10 @@ shared_part(key)
 shared_part_defaults(settings_ar)
 {
 	foreach(key in shared_item_keys())
+	{
 		settings_ar[key] = PART_RANDOM;
+		settings_ar[shared_whitelist_key(key)] = shared_whitelist_all(key);
+	}
 	return settings_ar;
 }
 
@@ -2073,8 +2170,26 @@ shared_segment_item_defaults(settings_ar)
 
 // Not a switch: gsc-tool stores case -1 as 16777215 (24 bits), which may never
 // match.
-shared_part_location_text(part, value)
+// A whitelist lists its spots in brackets.
+shared_part_location_text(key)
 {
+	part = shared_part(key);
+	value = get_cfg_int(key);
+	if(value == PART_WHITELIST)
+	{
+		if(shared_whitelist_empty(key)) return "^2collected";
+		indexes = shared_whitelist_indexes(key);
+		if(indexes.size == part.locations.size) return "random";
+		if(indexes.size == 1) return part.locations[indexes[0]];
+		// Brackets and commas white, the spots yellow as any value.
+		text = "";
+		foreach(index in indexes)
+		{
+			if(text != "") text += "^7, ";
+			text += "^3" + part.locations[index];
+		}
+		return "^7" + PART_WHITELIST_OPEN + text + "^7" + PART_WHITELIST_CLOSE;
+	}
 	if(value == PART_RANDOM) return "random";
 	if(value >= part.locations.size) return "^2collected";
 	return part.locations[value];
@@ -2090,6 +2205,7 @@ shared_part_spawns(craftablename, piecename, spawns)
 		if(part.craftable != craftablename || part.piece != piecename) continue;
 
 		value = shared_part_location(key);
+		if(value == PART_WHITELIST) return shared_whitelist_spawns(key, spawns);
 		if(value < 0) return spawns;
 		if(!isDefined(spawns[value]))
 		{

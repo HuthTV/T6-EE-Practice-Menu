@@ -67,6 +67,9 @@
                               Craftable part locations
 ##############################################################################*/
 #define PART_RANDOM  -1
+#define PART_WHITELIST  -2  // random among the spots in the item's whitelist (<key>_wl)
+#define PART_WHITELIST_OPEN   "["   // around a whitelist of two or more spots in its row
+#define PART_WHITELIST_CLOSE  "]"
 
 //spawn struct index (getstructarray order)
 #define MAXIS_BODY_ICE_TUNNEL       0

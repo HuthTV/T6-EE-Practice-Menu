@@ -40,6 +40,7 @@
 #define MENU_HOLD_VALUES    10      // A row with this many values or more repeats.
 #define MENU_HOLD_DELAY     400     // Milliseconds held before the first repeat.
 #define MENU_HOLD_STEP      100     // Milliseconds between repeats.
+#define MENU_HOLD_LABEL     "REPEAT" // Controls box text for frag on a row with no hold action (set_option_hold).
 
 // Two presses on a row that asks first must be this far apart, so a double tap
 // cannot pass (milliseconds).
@@ -389,6 +390,8 @@ create_menu(menu, parent, title)
 	self.menu.option_func[menu] = [];
 	self.menu.option_arg1[menu] = [];
 	self.menu.option_arg2[menu] = [];
+	self.menu.option_hold_func[menu] = [];
+	self.menu.option_hold_label[menu] = [];
 }
 
 create_option(menu, text, func, arg1, arg2)
@@ -398,6 +401,17 @@ create_option(menu, text, func, arg1, arg2)
 	self.menu.option_func[menu][index] = func;
 	self.menu.option_arg1[menu][index] = arg1;
 	self.menu.option_arg2[menu][index] = arg2;
+}
+
+// Gives the last row of menu a hold action: a tap on frag still acts as Enter, but
+// holding it past MENU_HOLD_DELAY runs func(arg1, arg2) once instead (a row with a
+// hold action never repeats). label replaces REPEAT in the controls box while the
+// cursor is on the row.
+set_option_hold(menu, func, label)
+{
+	index = self.menu.option_text[menu].size - 1;
+	self.menu.option_hold_func[menu][index] = func;
+	self.menu.option_hold_label[menu][index] = label;
 }
 
 // Adds a ">label" row to parent that opens the new submenu id, and returns id.
@@ -550,11 +564,24 @@ initialize_menu()
 				arg1 = self.menu.option_arg1[menu][index];
 				arg2 = self.menu.option_arg2[menu][index];
 
-				// A thread runs at once up to its first wait, so a row that repeats
-				// has raised step_repeats by the next line.
-				self.menu.step_repeats = undefined;
-				self thread [[ func ]](arg1, arg2);
-				if(is_true(self.menu.step_repeats)) self menu_hold_steps(func, arg1, arg2);
+				hold_func = self.menu.option_hold_func[menu][index];
+				if(isDefined(hold_func) && self fragbuttonpressed() && !self actionslotthreebuttonpressed())
+				{
+					// Frag on a row with a hold action: released early it steps as
+					// Enter does, held it runs the hold action.
+					if(self menu_frag_held())
+						self thread [[ hold_func ]](arg1, arg2);
+					else
+						self thread [[ func ]](arg1, arg2);
+				}
+				else
+				{
+					// A thread runs at once up to its first wait, so a row that repeats
+					// has raised step_repeats by the next line.
+					self.menu.step_repeats = undefined;
+					self thread [[ func ]](arg1, arg2);
+					if(is_true(self.menu.step_repeats)) self menu_hold_steps(func, arg1, arg2);
+				}
 			}
 
 			// Each press acts once, however long the button is held, unless
@@ -564,6 +591,20 @@ initialize_menu()
 		}
 		wait .05;
 	}
+}
+
+// Frag is still held MENU_HOLD_DELAY after the press (real time, as menu_hold_steps).
+menu_frag_held()
+{
+	timescale = float(getdvar("timescale"));
+	if(timescale < 1) timescale = 1;
+	held_at = getTime() + MENU_HOLD_DELAY * timescale;
+	while(self menu_open() && self fragbuttonpressed())
+	{
+		if(getTime() >= held_at) return true;
+		wait .05;
+	}
+	return false;
 }
 
 // Repeats a long row while frag stays held. The rebuild runs every step, but the cfg
@@ -853,7 +894,8 @@ draw_menu()
 	self.menu.hud["SubTitle"].color = level.practice_map.header_text_color;
 	self.menu.hud["SubTitle"] thread hud_fade(1, .1);
 
-	self.menu.hud["Help"] = self create_text("^7HOLD [^3[{+frag}]^7] REPEAT\n^7UP/DOWN [^3[{+actionslot 1}]^7]/[^3[{+actionslot 2}]^7]\n^7SELECT/EXIT [^3[{+actionslot 3}]^7]/[^3[{+actionslot 4}]^7]\n^7CLOSE [^3[{+melee}]^7]\n^3\"help\" ^7IN CHAT", "small", 1.2, "TOPLEFT", MENU_LEFT + 5, MENU_BOTTOM + MENU_HELP_GAP + 5, 1);
+	self.menu.help_label = MENU_HOLD_LABEL;
+	self.menu.hud["Help"] = self create_text(menu_help_text(MENU_HOLD_LABEL), "small", 1.2, "TOPLEFT", MENU_LEFT + 5, MENU_BOTTOM + MENU_HELP_GAP + 5, 1);
 	// The map's emblem, right of the controls.
 	if(isDefined(level.practice_map.menu_icon))
 		self.menu.hud["Icon"] = self create_rectangle(MENU_RIGHT - MENU_ICON_SIZE / 2 - 10, MENU_BOTTOM + MENU_HELP_GAP + MENU_HELP_HEIGHT / 2, MENU_ICON_SIZE, MENU_ICON_SIZE, MENU_TEXT_COLOR, level.practice_map.menu_icon, 6, 1);
@@ -862,6 +904,24 @@ draw_menu()
 
 	// "5/13" on a list longer than the visible rows, in the last row's right corner.
 	self.menu.hud["Position"] = self create_text("", "small", 1.2, "RIGHT", MENU_RIGHT - 6, MENU_FIRST_ROW_Y + (MENU_ROWS - 1) * MENU_ROW_SPACING, 1);
+}
+
+// The controls box. label is what holding frag does on the highlighted row.
+menu_help_text(label)
+{
+	return "^7HOLD [^3[{+frag}]^7] " + label + "\n^7UP/DOWN [^3[{+actionslot 1}]^7]/[^3[{+actionslot 2}]^7]\n^7SELECT/EXIT [^3[{+actionslot 3}]^7]/[^3[{+actionslot 4}]^7]\n^7CLOSE [^3[{+melee}]^7]\n^3\"help\" ^7IN CHAT";
+}
+
+// The controls box names the highlighted row's hold action, REPEAT on other rows.
+// Only a change rewrites the text.
+menu_update_help(menu, cursor)
+{
+	label = MENU_HOLD_LABEL;
+	if(isDefined(self.menu.option_hold_label[menu]) && isDefined(self.menu.option_hold_label[menu][cursor]))
+		label = self.menu.option_hold_label[menu][cursor];
+	if(!isDefined(self.menu.hud["Help"]) || label == self.menu.help_label) return;
+	self.menu.help_label = label;
+	self.menu.hud["Help"] setTextUnlimited(menu_help_text(label));
 }
 
 update_scrollbar()
@@ -902,6 +962,7 @@ update_scrollbar()
 			self.menu.hud["Cursor"] setPoint("CENTER", "CENTER", MENU_X, MENU_FIRST_ROW_Y + row * MENU_ROW_SPACING);
 	}
 	if(isDefined(self.menu.hud["Rows"])) self.menu.hud["Rows"] setTextUnlimited(text);
+	self menu_update_help(menu, cursor);
 	self menu_hide_percents(percents);
 
 	self menu_save_state();
