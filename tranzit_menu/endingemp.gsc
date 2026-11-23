@@ -39,6 +39,7 @@
 #define ENDINGEMP_TIME_FIRST   "7:00"   // Start Time limits (user, 2026-11-06).
 #define ENDINGEMP_TIME_LAST    "15:00"
 #define ENDINGEMP_TIME_DEFAULT "11:00"  // The middle, until the route's real time is known.
+#define ENDINGEMP_LIGHTS_NEEDED 4       // Vanilla richtofen_sidequest_c.
 
 endingemp_initialize()
 {
@@ -72,6 +73,7 @@ endingemp_default_cfg()
     settings_ar = practice_custom_time_defaults(settings_ar);
     settings_ar["emp_second_gun"] = 0;  // 0 the starting pistol, 1 MP5.
     settings_ar["emp_bowie"] = 1;
+    settings_ar["emp_light_cooldown"] = 0; // Index into endingemp_cooldowns, 0 vanilla (user, 2026-11-10).
     settings_ar = tranzit_teleport_defaults(settings_ar);
     return settings_ar;
 }
@@ -82,6 +84,7 @@ endingemp_build_menu(root)
         practice_custom_time_menu(settings);
         add_cfg_choice(settings, "Second Gun", "emp_second_gun", array("pistol", "MP5"));
         add_cfg_toggle(settings, "Bowie Knife", "emp_bowie");
+        add_cfg_choice(settings, "Light Cooldown", "emp_light_cooldown", array("vanilla 90 s", "30 s", "10 s", "5 s"));
         tranzit_drop_menu(settings);
         tranzit_teleport_menu(settings);
 }
@@ -112,6 +115,8 @@ endingemp_setup()
 
     setdvar("timescale", 1);
     endingemp_refresh_lights();
+    level thread endingemp_light_messages();
+    level thread endingemp_cooldown_watch();
     wait 0.5; // Normal speed for 500 ms before the player can move.
     self freezecontrols(0);
     if(!was_demigod) self toggle_demigod();
@@ -123,6 +128,68 @@ endingemp_setup()
     // this when the score passes the next drop's mark). A kill outside the playable
     // area drops nothing and the next kill tries again.
     if(get_cfg_int("emps_max")) level.zombie_vars["zombie_drop_item"] = 1;
+}
+
+// A chat line for every light an EMP puts out, with the step's count, and when one
+// comes back on (user, 2026-11-10). A thread per light, so two in one blast both show.
+endingemp_light_messages()
+{
+    level thread endingemp_light_on_messages();
+    while(true)
+    {
+        level waittill("safety_light_power_off", zone);
+        level thread endingemp_light_out_message(zone);
+    }
+}
+
+endingemp_light_out_message(zone)
+{
+    waittillframeend; // richtofen_sidequest_c counts the light first.
+    text = "Light out: ^3" + endingemp_light_label(zone);
+    if(isdefined(level.sq_progress) && isdefined(level.sq_progress["rich"]))
+        text += "^7 (" + level.sq_progress["rich"]["C_screecher_light"] + "/" + ENDINGEMP_LIGHTS_NEEDED + ")";
+    iprintln(text);
+}
+
+endingemp_light_on_messages()
+{
+    while(true)
+    {
+        level waittill("safety_light_power_on", zone);
+        iprintln("Light back: ^9" + endingemp_light_label(zone));
+    }
+}
+
+// The light's menu name. The powered item is the screecher_escape struct.
+endingemp_light_label(zone)
+{
+    name = zone.script_noteworthy;
+    if(!isdefined(name) && isdefined(zone.target)) name = zone.target.script_noteworthy;
+    if(!isdefined(name)) return "light";
+    names = tranzit_light_names();
+    labels = tranzit_light_labels();
+    for(i = 0; i < names.size; i++)
+        if(names[i] == name) return labels[i];
+    return name;
+}
+
+// How long an EMP keeps the lights off. Vanilla's one timer (emp_perk_off_time,
+// read at each blast) also covers perks and other powered things in the blast.
+endingemp_cooldowns()
+{
+    return array(90, 30, 10, 5);
+}
+
+endingemp_cooldown_watch()
+{
+    cooldowns = endingemp_cooldowns();
+    while(true)
+    {
+        choice = get_cfg_int("emp_light_cooldown");
+        if(choice < 0 || choice >= cooldowns.size) choice = 0;
+        level.zombie_vars["emp_perk_off_time"] = cooldowns[choice];
+        wait 0.25;
+    }
 }
 
 // The switch built and flipped, then waits for the power event (30 s of game time)

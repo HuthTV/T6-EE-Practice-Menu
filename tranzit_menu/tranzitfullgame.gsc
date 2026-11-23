@@ -97,8 +97,8 @@ tranzitfullgame_build_menu(root)
 
         box = add_submenu(settings, "box", "Mystery Box", "Box");
             box_guns = tranzitfullgame_box_hit_options();
-            add_cfg_choice(box, "Hit 1", "box_gun_1", box_guns.labels);
-            add_cfg_choice(box, "Hit 2", "box_gun_2", box_guns.labels);
+            add_cfg_pick_menu(box, "box_gun_1", "Hit 1", "box_gun_1", box_guns.labels);
+            add_cfg_pick_menu(box, "box_gun_2", "Hit 2", "box_gun_2", box_guns.labels);
 
         teleports = add_submenu(settings, "teleports", "Denizen Teleports", "Teleports");
             tranzit_teleport_menu(teleports);
