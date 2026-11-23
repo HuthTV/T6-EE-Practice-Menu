@@ -52,9 +52,8 @@ practice_map(menu_title, tool_name, cfg_dir, mode_dvar)
 practice_main(map, version)
 {
     level.practice_map = map;
-    level.practice_version = version;
     // The B2EE timer's init skips itself when this is set (every map and mode).
-    level.oprac_version = version;
+    level.practice_version = version;
 
     flag_init("menu_active");
     set_dvar_if_unset(map.mode_dvar, level.modes[0].name);

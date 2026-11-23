@@ -352,6 +352,8 @@ build_cheats_menu(root)
 	cheats = add_submenu(root, "cheats", "Cheats");
 		add_cfg_toggle(cheats, "OOPA Death", "oopa");
 		create_option(cheats, "Demigod: " + int_compare(self.demigod), ::toggle_demigod);
+		create_option(cheats, "Docile Zombies: " + int_compare(self.docile), ::toggle_docile);
+		create_option(cheats, "Zombie Spawns: " + int_compare(flag("spawn_zombies")), ::toggle_zombie_spawns);
 		drops = add_submenu(cheats, "drops", "Give Drop");
 			add_drop_option(drops, "Nuke", "nuke");
 			add_drop_option(drops, "Max Ammo", "full_ammo");
@@ -525,6 +527,7 @@ initialize_menu()
 	self.menu.root = level.gamemode;
 	self.menu.current = self.menu.root;
 	self.demigod = 0;
+	self.docile = 0;
 	// What the map loaded with, for Restart to apply (menu_restart_pending).
 	if(isDefined(level.mode_cfg) && !isDefined(level.mode_cfg_loaded)) level.mode_cfg_loaded = level.mode_cfg;
 
@@ -1086,6 +1089,43 @@ gamemode_live_tag( mode )
 fast_quit()
 {
     KillServer();
+}
+
+// Docile Zombies (user, 2026-11-22): zombies ignore the player, also after Zombie Blood ends (its end clears
+// ignoreme). Robots and other scripted walkers carry on. Off gives the game back its own ignoreme (none).
+toggle_docile()
+{
+    if(!self.docile)
+    {
+        self.docile = 1;
+        self thread docile_loop();
+    }
+    else
+    {
+        self notify("docile_off");
+        self.docile = 0;
+        self.ignoreme = 0;
+    }
+    self refresh_menu();
+}
+
+docile_loop()
+{
+    self endon("disconnect");
+    self endon("docile_off");
+    while(true)
+    {
+        self.ignoreme = 1;
+        wait 0.05;
+    }
+}
+
+// Zombie Spawns (user, 2026-11-22): stops or resumes spawning. Zombies already out stay, the round does not end.
+toggle_zombie_spawns()
+{
+    if(flag("spawn_zombies")) flag_clear("spawn_zombies");
+    else flag_set("spawn_zombies");
+    self refresh_menu();
 }
 
 toggle_demigod()

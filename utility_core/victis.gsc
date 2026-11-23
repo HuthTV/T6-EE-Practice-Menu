@@ -13,7 +13,7 @@
 // let fewer than four players finish the Easter egg. The settings are map-wide,
 // saved in the map's basegame.cfg, and shown in the root menu "Victis Settings".
 // The madeup replacefuncs name map scripts, so each map hands its own over.
-// The B2EE timer does not run beside a practice tool (level.oprac_version), so
+// The B2EE timer does not run beside a practice tool (level.practice_version), so
 // these are the only ones in the game.
 
 // Call from a Victis map's descriptor. fridge_default is a weapon of

@@ -215,7 +215,17 @@ timer_main_hud(hud)
 {
     if(!isDefined(level.timer_main_huds)) level.timer_main_huds = [];
     level.timer_main_huds[level.timer_main_huds.size] = hud;
+    timer_hud_on_top(hud);
     hud.alpha = timer_main_alpha();
+}
+
+// Drawn in the top pass, over end_game's foreground black background (_zm.gsc
+// player_intermission, sort 100), as B2EE's split rows are. The last split row is
+// made after end_game, so without this it sits under that background.
+timer_hud_on_top(hud)
+{
+    hud.foreground = 1;
+    hud.sort = 2000;
 }
 
 // A timer drawn by a mode that declared none is always shown.
@@ -228,6 +238,7 @@ timer_main_alpha()
 timer_segment_hud(hud)
 {
     level.timer_segment_hud = hud;
+    timer_hud_on_top(hud);
     timer_segment_refresh();
 }
 
