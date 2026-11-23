@@ -1,7 +1,9 @@
 # Builds every map's compiled menu on every push and pull request and uploads each
 # as its own artifact: o-prac-menu (Origins), m-prac-menu (Mob of the Dead),
 # t-prac-menu (TranZit), d-prac-menu (Die Rise) and b-prac-menu (Buried), each
-# holding only the compiled script.
+# holding only the compiled script. The scripts are built with short names (shorten.py):
+# which fields and flag strings get renamed comes from the committed shorten_owned.txt,
+# so CI ships the same bytes as a local build. names.txt per map maps short names back.
 name: Build
 
 on:
@@ -34,7 +36,16 @@ jobs:
 
       - name: Build
         shell: pwsh
-        run: python build.py -check
+        run: |
+          if (-not (Test-Path shorten_owned.txt)) { throw "shorten_owned.txt is missing: build once in the workspace and commit it." }
+          python build.py -check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: short-names
+          path: build/*/names.txt
+          if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
         with:

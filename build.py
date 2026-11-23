@@ -8,6 +8,9 @@
     python build.py -map od -deploy       Only Origins and Die Rise.
     python build.py -map origins mob      Maps by name or by letters, in any order.
     python build.py -tools                Also compile every z_tools/*.gsc (installed with -deploy).
+    python build.py -map o -full          Release with the source names (debugging: script errors
+                                          then name the real functions). By default releases are
+                                          shortened, see "Short names" below.
 
 Flags may be given in any order, with one or two dashes, in any case (-Map, --map).
 -check is accepted for "build only" (the old build_single.bat -Check).
@@ -42,10 +45,18 @@ A map's entry includes the core and its own folder. Every build checks both form
     build/<map>/source/), and includes each project file whose functions it calls. The core
     may not include a map folder or name maps\\mp\\zm_* scripts, and a map folder may not
     include another map's folder.
-  - Release: the map's files are joined into build/<map>/<entry>.gsc and compiled to one
+  - Release: the map's files are joined into build/<map>/full/<entry>.gsc and compiled to one
     script. Project #includes and #inlines become blank lines (so compile errors keep their
     file and line), the vanilla #includes of every file are collected at the top, and the
     shared headers go in once.
+
+Short names (default, -full turns it off): a compiled script must keep its strings, names
+included, in 64 KB. shorten.py renames the joined script's functions, locals, project-only
+fields and project-only flag/notify strings to 1-3 characters into build/<map>/<entry>.gsc,
+compiled to build/<map>/compiled/t6/<entry>.gsc (the file deploy and CI ship), with the map
+of names in build/<map>/names.txt. Which fields and strings are project-only comes from the
+workspace beside this repo (..\\t6-scripts-main and others, see shorten.py); a build there
+writes them to shorten_owned.txt, which CI reads, so commit it with the sources.
 """
 import argparse
 import hashlib
@@ -315,6 +326,37 @@ def run_gsc_tool(gsc_tool, folder, file, line_map):
     return Path(folder) / "compiled" / "t6" / Path(str(file).replace("\\", "/")).name
 
 
+def string_area(compiled):
+    """Bytes before the code segment (GSC_OBJ.cseg_offset): the area 16-bit offsets must reach."""
+    return int.from_bytes(Path(compiled).read_bytes()[20:24], "little")
+
+
+def shorten_release(info, gsc_tool, full_flat, out_flat, line_map, full_size, outside):
+    """Writes out_flat, the joined script with shortened names (shorten.py), compiles it and
+    returns (compiled file, report). Lines are unchanged, so errors still name the source."""
+    import shorten
+
+    try:
+        text, report = shorten.shorten(Path(full_flat).read_text(encoding="ascii"), outside)
+    except ValueError as error:
+        raise BuildError(f"shorten.py: {error}")
+    Path(out_flat).write_text(text, encoding="ascii", newline="\n")
+    names = ["# Short name <- source name: functions, then flag/notify strings, then fields. Locals are a, b, c... per function."]
+    names += [f"{new} <- {old}" for old, new in report["functions"].items()]
+    names += [f'"{new}" <- "{old}"' for old, new in report["strings"].items()]
+    names += [f".{new} <- .{old}" for old, new in report["fields"].items()]
+    (Path(out_flat).parent / "names.txt").write_text("\n".join(names) + "\n", encoding="ascii", newline="\n")
+    compiled = run_gsc_tool(gsc_tool, Path(out_flat).parent, Path(out_flat).name, line_map)
+    size = string_area(compiled)
+    if report["outside"]:
+        what = f"{len(report['strings'])} flag/notify strings, {len(report['fields'])} fields (from {report['outside']})"
+    else:
+        what = "no strings or fields (no ..\\t6-scripts-main and no shorten_owned.txt)"
+    print(f"[{info.name}] Built {compiled}: {len(report['functions'])} functions, {report['locals']} local names, {what} renamed, "
+          f"string area {full_size / 1024:.1f} -> {size / 1024:.1f} KB of 64 (saved {(full_size - size) / 1024:.1f} KB)")
+    return compiled, report
+
+
 def install_file(src, dst):
     Path(dst).parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dst)
@@ -326,7 +368,7 @@ def verify_install(src, dst):
 
 
 # ---------------------------------------------------------------- main
-def build_map(info, gsc_tool, deploy, source, deploy_dir):
+def build_map(info, gsc_tool, deploy, source, deploy_dir, full=False, outside=None, reports=None):
     map_build = BUILD_DIR / info.name
     map_build.mkdir(parents=True, exist_ok=True)
     files = get_menu_sources(info)
@@ -340,11 +382,24 @@ def build_map(info, gsc_tool, deploy, source, deploy_dir):
         run_gsc_tool(gsc_tool, source_dir, "scripts\\zm\\" + rel(f), None)
     print(f"[{info.name}] Checked {len(files)} source files")
 
-    # Release form: one script.
-    flat = map_build / info.entry_file
+    # Release form: one script. The plain join is compiled first (its errors name the real
+    # functions), in build/<map>/full/ unless -full makes it the release.
+    full_dir = map_build if full else map_build / "full"
+    full_dir.mkdir(parents=True, exist_ok=True)
+    flat = full_dir / info.entry_file
     line_map = join_sources(files, flat, info)
-    compiled = run_gsc_tool(gsc_tool, map_build, info.entry_file, line_map)
-    print(f"[{info.name}] Built {compiled}")
+    compiled = run_gsc_tool(gsc_tool, full_dir, info.entry_file, line_map)
+    size = string_area(compiled)
+    if full:
+        print(f"[{info.name}] Built {compiled} (full names, string area {size / 1024:.1f} KB of 64)")
+        if size >= 0x10000:
+            print(f"[{info.name}] WARNING: past 64 KB, this script will not load. Build without -full.")
+    else:
+        compiled, report = shorten_release(info, gsc_tool, flat, map_build / info.entry_file, line_map, size, outside)
+        if reports is not None:
+            reports.append(report)
+        if string_area(compiled) >= 0x10000:
+            raise BuildError(f"{compiled} is past 64 KB of strings and will not load.")
 
     if not deploy:
         return
@@ -399,6 +454,7 @@ def parse_args(argv):
     parser.add_argument("-deploy-dir", "--deploy-dir", metavar="PATH", help="the game's scripts/zm folder")
     parser.add_argument("-source", "--source", action="store_true", help="install plain sources instead of the compiled release")
     parser.add_argument("-tools", "--tools", action="store_true", help="also build z_tools/*.gsc")
+    parser.add_argument("-full", "--full", action="store_true", help="release with the source names (shorten.py skipped)")
     parser.add_argument("-check", "--check", action="store_true", help="build only (overrides -deploy)")
     return parser.parse_args(argv)
 
@@ -410,8 +466,25 @@ def main(argv):
     deploy_dir = resolve_deploy_dir(args.deploy_dir) if deploy else None
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
 
-    for info in select_maps(args.map):
-        build_map(info, gsc_tool, deploy, args.source, deploy_dir)
+    full = args.full or args.source
+    outside = None
+    if not full:
+        import shorten
+
+        # The workspace beside this repo knows what the game names; CI reads the list a
+        # workspace build left in shorten_owned.txt.
+        outside = shorten.Outside.from_workspace() or shorten.Outside.from_file()
+        if outside is None:
+            print("WARNING: no ..\\t6-scripts-main and no shorten_owned.txt: fields and flag strings keep their names.")
+    reports = []
+    maps = select_maps(args.map)
+    for info in maps:
+        build_map(info, gsc_tool, deploy, args.source, deploy_dir, full, outside, reports)
+    if outside is not None and outside.source == "workspace":
+        project = [p for folder in [CORE] + MAP_FOLDERS + [m.entry for m in MAPS]
+                   for p in (ROOT / folder).glob("*.gs[ch]")]
+        if shorten.update_owned_file(reports, project):
+            print("Updated shorten_owned.txt: commit it with the sources, CI renames the names it lists.")
 
     if deploy:
         # Older builds installed scripts/zm/menu.gsc, which would load a second menu.
