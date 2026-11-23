@@ -175,6 +175,8 @@ basegame_default_cfg()
     settings_ar["show_identifier"] = 1; // Plutonium's session identifier and script hashes (user, 2026-11-02).
     settings_ar["menu_key"] = 0; // The key that opens the menu with melee: 0 special grenade (user, 2026-11-02), 1 dpad slot 1 (the shield).
     settings_ar["player_character"] = 0; // 0 as vanilla picks, else 1 + the characterindex (user, 2026-11-06).
+    for(i = 2; i <= 4; i++)
+        settings_ar["player_character_" + i] = 0; // Co-op clients by player slot (user, 2026-11-10).
 
     if(isDefined(level.practice_map.base_cfg_defaults))
         settings_ar = [[ level.practice_map.base_cfg_defaults ]](settings_ar);
@@ -290,8 +292,8 @@ basegame_character_install()
 
 basegame_give_character()
 {
-    index = get_cfg_int("player_character") - 1;
-    if(index >= 0)
+    index = get_cfg_int(self basegame_character_key()) - 1;
+    if(index >= 0 && !basegame_character_held(self, index))
     {
         self.characterindex = index;
         if(isDefined(level.practice_map.character_chosen)) [[ level.practice_map.character_chosen ]](index);
@@ -299,10 +301,45 @@ basegame_give_character()
     self [[ level.practice_give_character ]]();
 }
 
-// Menu action. The model and voice are given at spawn.
+// Each player keeps their own choice: the host the old key, a co-op client its
+// player slot's (2-4). Saved in the host's basegame.cfg.
+basegame_character_key()
+{
+    slot = self getentitynumber() + 1;
+    if(slot <= 1) return "player_character";
+    return "player_character_" + slot;
+}
+
+// Whether another player already has this characterindex, so two never share one
+// (a choice made before the other player picked falls back to vanilla's).
+basegame_character_held(player, index)
+{
+    foreach(other in get_players())
+        if(other != player && isDefined(other.characterindex) && other.characterindex == index) return true;
+    return false;
+}
+
+// Whether another connected player has chosen this value (1 + characterindex).
+basegame_character_chosen(value)
+{
+    foreach(other in get_players())
+        if(other != self && get_cfg_int(other basegame_character_key()) == value) return true;
+    return false;
+}
+
+// Menu action: the player's own character, skipping one another player chose.
+// The model and voice are given at spawn.
 basegame_next_character(last)
 {
-    self cfg_increment_int("player_character", array(0, last));
+    key = self basegame_character_key();
+    value = get_cfg_int(key);
+    for(i = 0; i <= last; i++)
+    {
+        value++;
+        if(value > last) value = 0;
+        if(!value || !self basegame_character_chosen(value)) break;
+    }
+    self cfg_set_int(key, value);
     self iprintln("Character applies on restart");
 }
 

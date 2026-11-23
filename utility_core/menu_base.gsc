@@ -313,7 +313,7 @@ build_general_menu(root)
 		if(isDefined(level.practice_map.character_names))
 		{
 			names = combinearrays(array("default"), level.practice_map.character_names);
-			create_option(general, "Character: ^3" + names[get_cfg_int("player_character")], ::basegame_next_character, names.size - 1);
+			create_option(general, "Character: ^3" + names[get_cfg_int(self basegame_character_key())], ::basegame_next_character, names.size - 1);
 		}
 		create_option(general, "Identifier/Hashes: " + cfgint_compare("show_identifier"), ::basegame_toggle_show_identifier);
 		add_cfg_choice(general, "Menu Key", "menu_key", array("melee + special", "melee + slot 1"));
