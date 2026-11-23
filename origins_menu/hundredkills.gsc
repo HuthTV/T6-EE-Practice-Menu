@@ -207,6 +207,7 @@ hundredkills_build_menu(root)
 
     // No Panzer or robot menus (user, 2026-11-04): the segment needs neither.
     add_cfg_choice(settings, "Templars", "kills_templar", array("none", "round 16", "round 17", "random"));
+    shared_add_quote_lock_row(settings);
 }
 
 hundredkills_default_cfg()

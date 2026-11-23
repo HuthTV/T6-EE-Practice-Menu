@@ -125,6 +125,13 @@
 #define STG_PAPPED  2   // Upgraded STG-44 instead of the MP40
 
 /*##############################################################################
+                              Quote skip lock (starts after round 8, "quote_lock")
+##############################################################################*/
+#define QUOTE_LOCK_NONE     0   // no lock: story lines and the Maxis drone intro play as a normal run
+#define QUOTE_LOCK_PARTIAL  1   // story_vo_playing stuck (clue ended while it waited for the player's quote)
+#define QUOTE_LOCK_FULL     2   // story_vo_playing, sam_talking and every player's dontspeak stuck (clue ended in her line)
+
+/*##############################################################################
                               Boomhilda ammo (held starts, "boomhilda_ammo", "boomhilda_clip")
 ##############################################################################*/
 #define BOOMHILDA_AMMO_STEP    10  // The setting steps the total ammo by this much.

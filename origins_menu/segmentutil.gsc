@@ -863,6 +863,603 @@ shared_kill_plane()
     level notify( "biplane_down" );
 }
 
+// Only the named generators (keys as genprac: start_bunker, tank_trench, mid_trench, nml_right, nml_left, church),
+// powered as shared_generators does, with no round 10 hold.
+shared_power_generators(keys)
+{
+    foreach(key in keys)
+    {
+        gen = level.zone_capture.zones["generator_" + key];
+        gen maps\mp\zm_tomb_capture_zones::set_player_controlled_area();
+        gen.n_current_progress = 100;
+        gen maps\mp\zm_tomb_capture_zones::generator_state_power_up();
+        level setclientfield( gen.script_noteworthy, gen.n_current_progress / 100 );
+    }
+}
+
+/*##############################################################################
+                              Story VO (every segment start)
+##############################################################################*/
+// Story lines are Samantha's and the narration that take story_vo_playing, mute the players or hold sam_talking
+// (vanilla zm_tomb_vo). A real run has heard some of them by the start: a segment must not play those again, since
+// they decide when a later line (a clue, the Maxis drone intro) can take the flag. Two rules cover every start:
+//   - Lines from before round 7 never play: game start and round 1 and 2 end narration, Samantha's round 7 intro
+//     (5 and 6 are never reached, the round skip jumps from round 1), the first box sighting. The round 7 intro
+//     thread is replaced too, so samantha_intro_done waits for the release.
+//   - Until the release, a line whose trigger fires is one the route has heard: the setup replays the route (finds,
+//     puzzles, crafts, soul boxes, generators, EE steps), so the line is marked played and stays silent. Counters
+//     still advance (Samantha's next puzzle line per element is the one the run would hear).
+// At the release (segment.story_release) samantha_intro_done is set, as round 7 did in the run, and the one-shot
+// lines a run hears without a setup trigger are marked played (first staff piece, soul box Richtofen, chamber when
+// the mound is open with the gramophone in hand). No clue is assumed played: the 5 minute clue cooldown starts at 0.
+// Clues whose step the route has done by the start are in level.shared_story_heard (shared_get_parts: Panzer
+// and Gen 6 fire parts). Everything after the release is vanilla: random lines (promises, encouragement,
+// chastise).
+shared_story_install()
+{
+    level.shared_story_heard = [];
+    replacefunc( maps\mp\zm_tomb_vo::game_start_solo_vo, ::shared_story_game_start );
+    replacefunc( maps\mp\zm_tomb_vo::round_one_end_solo_vo, ::shared_story_no_line );
+    replacefunc( maps\mp\zm_tomb_vo::round_two_end_solo_vo, ::shared_story_no_line );
+    replacefunc( maps\mp\zm_tomb_vo::start_samantha_intro_vo, ::shared_story_no_line );
+    replacefunc( maps\mp\zm_tomb_vo::samantha_intro_3, ::shared_story_no_line );
+    replacefunc( maps\mp\zm_tomb_vo::wait_and_play_first_magic_box_seen_vo, ::shared_story_no_line_arg );
+    replacefunc( maps\mp\zm_tomb_vo::watch_one_shot_samantha_line, ::shared_story_find_line );
+    replacefunc( maps\mp\zm_tomb_vo::watch_one_shot_samantha_clue, ::shared_story_clue );
+    replacefunc( maps\mp\zm_tomb_vo::say_puzzle_completion_line, ::shared_story_puzzle_line );
+    replacefunc( maps\mp\zm_tomb_vo::run_staff_crafted_vo, ::shared_story_staff_crafted );
+    replacefunc( maps\mp\zm_tomb_vo::tomb_drone_built_vo, ::shared_story_drone_built );
+    replacefunc( maps\mp\zm_tomb_vo::richtofenrespondvoplay, ::shared_story_richtofen );
+    replacefunc( maps\mp\zm_tomb_capture_zones::all_zones_captured_vo, ::shared_story_all_zones );
+    replacefunc( maps\mp\zm_tomb_ee_main::ee_samantha_say, ::shared_story_ee_say );
+    level thread shared_story_release();
+}
+
+// True once the player is released: lines play natively from then on.
+shared_story_live()
+{
+    return is_true(level.shared_story_live);
+}
+
+shared_story_release()
+{
+    release = level.segment.story_release;
+    while(!isdefined(level.flag) || !isdefined(level.flag[release])) wait 0.05;
+    flag_wait(release);
+    // The lock goes in before samantha_intro_done, so no clue or chamber line can take the flag first
+    lock = shared_quote_lock();
+    if(lock != QUOTE_LOCK_NONE) flag_set("story_vo_playing");
+    if(lock == QUOTE_LOCK_FULL)
+    {
+        level.sam_talking = 1;
+        maps\mp\zm_tomb_vo::set_players_dontspeak(1);
+    }
+    level.sam_staff_line_played = 1;
+    // Chamber line: heard once the mound is fully open with the gramophone back in hand (user, 2026-11-22: Gram row
+    // "in hand"). Gramophone left at the mound, or a closed mound: still ahead, native.
+    if(level.segment.open_mound && !level.segment.leave_gramophone) level.sam_chamber_line_played = 1;
+    flag_set("vo_soul_box_intro_played");
+    flag_set("vo_soul_box_continue_played");
+    level.shared_story_live = true;
+    flag_set("samantha_intro_done");
+    print("O-Prac story VO live: puzzle lines " + shared_story_puzzle_counts() + ", quote lock " + lock + "\n");
+}
+
+// Starts after round 8 (user, 2026-11-23): the run's quote skip lock (rounds 7 and 8) may be behind them, so they
+// choose none, partial or full. A lock leaves the Maxis drone intro waiting forever, so maxis_crafted_intro_done
+// stays clear and every maxissay line (step 4 hole, Freedom) is skipped. Earlier starts perform the lock themselves.
+// The starts after round 8 are the ones built from shared_segment_item_defaults, which holds the key (Pre-Ice has no
+// segment.round: it skips to round 10 after its release). A start on round 8 or earlier never has it, whatever an
+// older cfg file holds (the quote skip modes and Panzer perform the lock).
+shared_quote_lock_option()
+{
+    if(!isdefined(level.segment) || !isdefined(level.mode_cfg) || !isdefined(level.mode_cfg["quote_lock"])) return false;
+    return !isdefined(level.segment.round) || level.segment.round > 8;
+}
+
+// Read once, at its first use (the drone craft or the release), so a row changed later waits for the restart
+shared_quote_lock()
+{
+    if(!isdefined(level.shared_quote_lock))
+    {
+        level.shared_quote_lock = QUOTE_LOCK_NONE;
+        if(shared_quote_lock_option()) level.shared_quote_lock = get_cfg_int("quote_lock");
+    }
+    return level.shared_quote_lock;
+}
+
+shared_add_quote_lock_row(menu)
+{
+    if(shared_quote_lock_option()) add_cfg_choice(menu, "Quote Skip Lock", "quote_lock", array("none", "partial", "full"));
+}
+
+shared_story_puzzle_counts()
+{
+    text = "";
+    for(i = 1; i <= 4; i++)
+    {
+        count = 0;
+        if(isdefined(level.puzzle_completion_lines_count) && isdefined(level.puzzle_completion_lines_count[i])) count = level.puzzle_completion_lines_count[i];
+        text = text + count + " ";
+    }
+    return text;
+}
+
+// game_start_solo_vo: start_narrative_vo muted the players 10 s before it, the vanilla line unmutes them
+shared_story_game_start()
+{
+    // A full quote skip lock already in (Pre-Ice releases before its round logic starts) keeps everyone muted
+    if(shared_story_live() && shared_quote_lock() == QUOTE_LOCK_FULL) return;
+    maps\mp\zm_tomb_vo::set_players_dontspeak(0);
+}
+
+shared_story_no_line()
+{
+}
+
+shared_story_no_line_arg(arg)
+{
+}
+
+// watch_one_shot_samantha_line (gramophone, master and first record finds): a find during setup was heard
+shared_story_find_line(str_line, str_notify)
+{
+    while(true)
+    {
+        level waittill(str_notify, e_play_on);
+        if(!isdefined(e_play_on)) continue;
+        if(!shared_story_live()) return;
+        maps\mp\zm_tomb_vo::set_players_dontspeak(1);
+        played = maps\mp\zm_tomb_vo::samanthasay(str_line, e_play_on);
+        maps\mp\zm_tomb_vo::set_players_dontspeak(0);
+        if(played) return;
+    }
+}
+
+// watch_one_shot_samantha_clue, plus level.shared_story_heard: a clue whose step the route has done stays silent
+shared_story_clue(str_line, str_notify, str_endon)
+{
+    if(isdefined(str_endon)) level endon(str_endon);
+    if(!isdefined(level.next_samantha_clue_time)) level.next_samantha_clue_time = gettime();
+
+    while(true)
+    {
+        level waittill(str_notify, e_player);
+        if(isdefined(level.shared_story_heard[str_notify])) return;
+        wait 10;
+        if(isdefined(e_player) && is_true(e_player.vo_promises_playing)) continue;
+        while(is_true(level.sam_talking)) wait_network_frame();
+        if(level.next_samantha_clue_time > gettime()) continue;
+
+        if(!isplayer(e_player))
+        {
+            foreach(player in getplayers())
+            {
+                if(player.zombie_vars["zombie_powerup_zombie_blood_on"])
+                {
+                    e_player = player;
+                    break;
+                }
+            }
+        }
+
+        if(isdefined(e_player) && isplayer(e_player) && e_player.zombie_vars["zombie_powerup_zombie_blood_on"] && flag("samantha_intro_done"))
+        {
+            flag_waitopen("story_vo_playing");
+            flag_set("story_vo_playing");
+            while(is_true(e_player.isspeaking)) wait_network_frame();
+            if(!is_player_valid(e_player)) continue;
+            maps\mp\zm_tomb_vo::set_players_dontspeak(1);
+            level.sam_talking = 1;
+            e_player playsoundtoplayer(str_line, e_player);
+            n_duration = soundgetplaybacktime(str_line);
+            wait(n_duration / 1000);
+            level.sam_talking = 0;
+            level.next_samantha_clue_time = gettime() + 300000;
+            flag_clear("story_vo_playing");
+            maps\mp\zm_tomb_vo::set_players_dontspeak(0);
+            return;
+        }
+    }
+}
+
+// say_puzzle_completion_line: a puzzle the setup solves counts its line without playing it
+shared_story_puzzle_line(n_element_enum)
+{
+    live = shared_story_live();
+    level notify("quest_progressed");
+    wait 4;
+    if(level.puzzle_completion_lines_count[n_element_enum] >= level.puzzle_completion_lines[n_element_enum].size) return;
+    str_line = level.puzzle_completion_lines[n_element_enum][level.puzzle_completion_lines_count[n_element_enum]];
+    level.puzzle_completion_lines_count[n_element_enum]++;
+    if(!live) return;
+    maps\mp\zm_tomb_vo::set_players_dontspeak(1);
+    level maps\mp\zm_tomb_vo::samanthasay(str_line, self);
+    maps\mp\zm_tomb_vo::set_players_dontspeak(0);
+}
+
+// run_staff_crafted_vo (self = the crafter): a staff the setup crafts was heard
+shared_story_staff_crafted(str_sam_line)
+{
+    if(!shared_story_live()) return;
+    wait 1;
+    while(is_true(self.isspeaking)) wait_network_frame();
+
+    if(level.n_staffs_crafted == 4)
+        self maps\mp\zm_tomb_vo::all_staffs_crafted_vo();
+    else if(isdefined(str_sam_line))
+    {
+        flag_waitopen("story_vo_playing");
+        flag_set("story_vo_playing");
+        maps\mp\zm_tomb_vo::set_players_dontspeak(1);
+        maps\mp\zm_tomb_vo::samanthasay(str_sam_line, self, 1);
+        maps\mp\zm_tomb_vo::set_players_dontspeak(0);
+        flag_clear("story_vo_playing");
+    }
+}
+
+// tomb_drone_built_vo (self = the crafter): a drone the setup crafts had its Maxis intro, which maxissay needs
+shared_story_drone_built(s_craftable)
+{
+    if(s_craftable.weaponname != "equip_dieseldrone_zm") return;
+    if(!shared_story_live())
+    {
+        // Under a quote skip lock the run's intro never got the flag: it is still waiting
+        if(shared_quote_lock() == QUOTE_LOCK_NONE) flag_set("maxis_crafted_intro_done");
+        return;
+    }
+    flag_waitopen("story_vo_playing");
+    flag_set("story_vo_playing");
+    maps\mp\zm_tomb_vo::set_players_dontspeak(1);
+    wait 1;
+    foreach(vox_line in array("vox_maxi_maxis_drone_1_0", "vox_maxi_maxis_drone_4_0"))
+    {
+        e_vo_origin = maps\mp\zm_tomb_vo::get_speaking_location_maxis_drone(self, s_craftable);
+        e_vo_origin playsoundwithnotify(vox_line, "sound_done" + vox_line);
+        e_vo_origin waittill("sound_done" + vox_line);
+        e_vo_origin delete();
+        wait 1;
+    }
+    if(isdefined(self) && self.character_name == "Richtofen")
+    {
+        vox_line = "vox_plr_2_maxis_drone_5_0";
+        self playsoundwithnotify(vox_line, "sound_done" + vox_line);
+        self waittill("sound_done" + vox_line);
+    }
+    maps\mp\zm_tomb_vo::set_players_dontspeak(0);
+    flag_clear("story_vo_playing");
+    flag_set("maxis_crafted_intro_done");
+}
+
+// richtofenrespondvoplay (soul box start, continue, first and last box done, beacon): heard if called in setup
+shared_story_richtofen(vox_category, b_richtofen_first, str_flag)
+{
+    if(!isdefined(b_richtofen_first)) b_richtofen_first = 0;
+    if(!shared_story_live())
+    {
+        if(isdefined(str_flag)) flag_set(str_flag);
+        return;
+    }
+    if(flag("story_vo_playing")) return;
+    flag_set("story_vo_playing");
+    maps\mp\zm_tomb_vo::set_players_dontspeak(1);
+
+    // Vanilla order: Richtofen first when asked, else the caller first, others within 800 units
+    if(self.character_name == "Richtofen")
+    {
+        if(b_richtofen_first)
+        {
+            self shared_story_plr_line(vox_category);
+            wait 0.5;
+            self shared_story_richtofen_others(vox_category, false, false);
+        }
+        else
+        {
+            self shared_story_richtofen_others(vox_category, false, true);
+            if(isdefined(self)) self shared_story_plr_line(vox_category);
+        }
+    }
+    else if(b_richtofen_first)
+    {
+        self shared_story_richtofen_others(vox_category, true, true);
+        if(isdefined(self)) self shared_story_plr_line(vox_category);
+    }
+    else
+    {
+        self shared_story_plr_line(vox_category);
+        wait 0.5;
+        self shared_story_richtofen_others(vox_category, true, false);
+    }
+
+    if(isdefined(str_flag)) flag_set(str_flag);
+    maps\mp\zm_tomb_vo::set_players_dontspeak(0);
+    flag_clear("story_vo_playing");
+}
+
+shared_story_plr_line(vox_category)
+{
+    str_vox_line = "vox_plr_" + self.characterindex + "_" + vox_category + "_0";
+    self playsoundwithnotify(str_vox_line, "rich_done");
+    self waittill("rich_done");
+}
+
+// The other players near self who are (richtofen true) or are not (false) Richtofen say their line, pause after each
+shared_story_richtofen_others(vox_category, richtofen, pause)
+{
+    foreach(player in getplayers())
+    {
+        if((player.character_name == "Richtofen") != richtofen || distance2d(player.origin, self.origin) >= 800) continue;
+        player shared_story_plr_line(vox_category);
+        if(pause) wait 0.5;
+    }
+}
+
+// all_zones_captured_vo: generators the setup powers were heard
+shared_story_all_zones()
+{
+    flag_wait("all_zones_captured");
+    if(!shared_story_live()) return;
+    flag_waitopen("story_vo_playing");
+    maps\mp\zm_tomb_vo::set_players_dontspeak(1);
+    flag_set("story_vo_playing");
+    e_speaker = maps\mp\zm_tomb_capture_zones::get_closest_player_to_richtofen();
+    if(isdefined(e_speaker))
+    {
+        e_speaker maps\mp\zm_tomb_vo::set_player_dontspeak(0);
+        e_speaker maps\mp\zombies\_zm_audio::create_and_play_dialog("zone_capture", "all_generators_captured");
+        e_speaker waittill_any("done_speaking", "disconnect");
+    }
+    e_richtofen = maps\mp\zm_tomb_capture_zones::get_player_named("Richtofen");
+    if(isdefined(e_richtofen))
+    {
+        e_richtofen maps\mp\zm_tomb_vo::set_player_dontspeak(0);
+        e_richtofen maps\mp\zombies\_zm_audio::create_and_play_dialog("zone_capture", "all_generators_captured");
+    }
+    maps\mp\zm_tomb_vo::set_players_dontspeak(0);
+    flag_clear("story_vo_playing");
+}
+
+// ee_samantha_say (EE step announcements, portal souls, freedom): a step the setup runs was heard
+shared_story_ee_say(str_vox)
+{
+    if(!shared_story_live()) return;
+    flag_waitopen("story_vo_playing");
+    flag_set("story_vo_playing");
+    maps\mp\zm_tomb_vo::set_players_dontspeak(1);
+    maps\mp\zm_tomb_vo::samanthasay(str_vox, get_players()[0]);
+    maps\mp\zm_tomb_vo::set_players_dontspeak(0);
+    flag_clear("story_vo_playing");
+}
+
+/*##############################################################################
+                              Maxis Quote Skip (quoteskipwind, quoteskip)
+##############################################################################*/
+// Gens 1, 2, 3 and 5. Gen 4 (Juggernog) stays off: the plane / Panzer route powers it in round 8.
+shared_quoteskip_generators()
+{
+    shared_power_generators(array("start_bunker", "tank_trench", "mid_trench", "nml_left"));
+}
+
+// What both quote skip starts carry: the mound discs, the ice disc, one ice part, and robots already seen and shot
+// (no first-time robot quotes).
+shared_quoteskip_items()
+{
+    self maps\mp\zombies\_zm_craftables::player_get_craftable_piece("gramophone", "vinyl_player");
+    self maps\mp\zombies\_zm_craftables::player_get_craftable_piece("gramophone", "vinyl_master");
+    self maps\mp\zombies\_zm_craftables::player_get_craftable_piece("gramophone", "vinyl_ice");
+    self maps\mp\zombies\_zm_craftables::player_get_craftable_piece("elemental_staff_water", "upper_staff");
+    level.giant_robot_discovered = 1;
+    level.shoot_robot_vo = 1;
+}
+
+// Unlimited sprint for the footage (Infinite Sprint row, user 2026-11-22). Cheat dvar, set from the server script.
+shared_quoteskip_sprint()
+{
+    setdvar("player_sprintUnlimited", get_cfg_int("qs_sprint"));
+}
+
+// The tablet picked up at the bunker and not cleaned yet (vanilla bunker_trigger_thread, stage 0 -> 1)
+shared_tablet_dirty()
+{
+    while(!isDefined(level.n_tablets_remaining) || !isDefined(self.sq_one_inch_punch_stage)) wait 0.05;
+    self.sq_one_inch_punch_stage++;
+    self.sq_one_inch_punch_tablet_num = level.n_tablets_remaining;
+    self setclientfieldtoplayer( "player_tablet_state", 2 );
+    self thread maps\mp\zm_tomb_ee_side::sq_one_inch_punch_disconnect_watch();
+    self thread maps\mp\zm_tomb_ee_side::sq_one_inch_punch_death_watch();
+    getent( "tablet_bunker_" + level.n_tablets_remaining, "targetname" ) delete();
+    level.n_tablets_remaining--;
+}
+
+// The soul box nearest origin, opened (its first soul starts the box and its animation, vanilla box_footprint_think)
+// and set to souls
+shared_prefill_soul_box(origin, souls)
+{
+    box = undefined;
+    foreach(ent in getentarray("foot_box", "script_noteworthy"))
+        if(!isdefined(box) || distancesquared(ent.origin, origin) < distancesquared(box.origin, origin)) box = ent;
+    if(!isdefined(box)) return;
+    box notify("soul_absorbed", self);
+    wait 0.05;
+    box.n_souls_absorbed = souls;
+}
+
+shared_quoteskip_defaults()
+{
+    settings_ar = [];
+    settings_ar["qs_hud"] = 1;
+    settings_ar["qs_sprint"] = 1;
+    settings_ar["stg_start"] = STG_NO;
+    settings_ar["headshot_reward"] = 0;
+    settings_ar = shared_start_time_defaults(settings_ar);
+    settings_ar = shared_part_defaults(settings_ar);
+    settings_ar = shared_segment_item_defaults(settings_ar);
+    settings_ar["quote_lock"] = undefined; // the lock is what these modes practise (shared_quote_lock_option)
+    settings_ar = shared_schedule_defaults(settings_ar);
+    settings_ar = shared_relay_defaults(settings_ar, false);
+    settings_ar = shared_robot_defaults(settings_ar, FOOT_LEFT);
+    settings_ar = shared_disc_defaults(settings_ar, 1);
+    return settings_ar;
+}
+
+/*##############################################################################
+                              Story VO HUD (Maxis Quote Skip)
+##############################################################################*/
+// Big STORY VO state on the left: FREE (green) while story_vo_playing is clear, IN USE (orange) while a line holds it,
+// STUCK (red) once a Samantha zombie blood clue's end event came while the flag was held, 10 to 40 s after that
+// clue's trigger (the clue thread dies before its flag_clear, vanilla zm_tomb_vo watch_one_shot_samantha_clue).
+// Three HUD elements.
+shared_story_vo_hud()
+{
+    level.shared_vo_stuck = false;
+    level.shared_vo_trigger = [];
+    level.shared_vo_check_blood = false;
+    pairs = array("sam_clue_dig", "elemental_staff_water_all_pieces_found", "sam_clue_mechz", "mechz_killed",
+        "sam_clue_biplane", "biplane_down", "sam_clue_zonecap", "staff_piece_capture_complete",
+        "sam_clue_tank", "elemental_staff_lightning_all_pieces_found", "sam_clue_giant", "elemental_staff_air_all_pieces_found");
+    for(i = 0; i < pairs.size; i += 2) level thread shared_story_vo_watch(pairs[i], pairs[i + 1]);
+
+    bg = newclienthudelem(self);
+    bg.horzalign = "left";
+    bg.vertalign = "middle";
+    bg.alignx = "left";
+    bg.aligny = "middle";
+    bg.x = 6;
+    bg.foreground = 1;
+    bg.sort = 90;
+    bg.hidewheninmenu = 0;
+    bg setshader("black", 150, 92);
+    bg.alpha = 0.65;
+    bg.y = 12;
+    head = self shared_story_vo_text(-16, 1.4);
+    head setText("STORY VO");
+    head.color = (0.85, 0.85, 0.85);
+    state = self shared_story_vo_text(10, 2.6);
+    // The clue check: a countdown from the trigger to its check 10 s later, then whether you were in zombie blood
+    check = self shared_story_vo_text(38, 1.2);
+    check.alpha = 0;
+    result = self shared_story_vo_text(38, 1.2);
+    result.alpha = 0;
+    last = "";
+    shown = "";
+    while(true)
+    {
+        t = gettime();
+        if(isdefined(level.shared_vo_check_at) && t < level.shared_vo_check_at)
+        {
+            // Always one decimal ("9.0", not "9"): setValue drops a zero tenth (user, 2026-11-22)
+            tenths = int((level.shared_vo_check_at - t) / 100);
+            check setTextUnlimited("CHECK IN " + int(tenths / 10) + "." + (tenths % 10));
+            check.alpha = 1;
+            result.alpha = 0;
+        }
+        else
+        {
+            check.alpha = 0;
+            text = "";
+            if(isdefined(level.shared_vo_check_done) && t - level.shared_vo_check_done < 4000)
+            {
+                text = "CHECK: NO BLOOD";
+                if(level.shared_vo_check_blood) text = "CHECK: IN BLOOD";
+            }
+            if(text != shown)
+            {
+                shown = text;
+                result setText(text);
+                result.color = (1, 0.3, 0.3);
+                if(level.shared_vo_check_blood) result.color = (0.3, 1, 0.35);
+            }
+            result.alpha = 1;
+        }
+        if(!flag("story_vo_playing")) level.shared_vo_stuck = false;
+        now = "FREE";
+        if(level.shared_vo_stuck) now = "STUCK";
+        else if(flag("story_vo_playing")) now = "IN USE";
+        if(now != last)
+        {
+            last = now;
+            state setText(now);
+            if(now == "FREE") state.color = (0.3, 1, 0.35);
+            else if(now == "IN USE") state.color = (1, 0.6, 0.12);
+            else state.color = (1, 0.22, 0.22);
+        }
+        wait 0.05;
+    }
+}
+
+shared_story_vo_watch(trigger, end_event)
+{
+    level endon("end_game");
+    level thread shared_story_vo_trigger_watch(trigger);
+    level waittill(end_event);
+    waittillframeend;
+    t = level.shared_vo_trigger[trigger];
+    if(flag("story_vo_playing") && isdefined(t) && gettime() - t >= 10000 && gettime() - t <= 40000) level.shared_vo_stuck = true;
+}
+
+// The clue waits 10 s after the first trigger and misses the ones in between
+shared_story_vo_trigger_watch(trigger)
+{
+    level endon("end_game");
+    while(true)
+    {
+        level waittill(trigger);
+        t = level.shared_vo_trigger[trigger];
+        if(!isdefined(t) || gettime() - t > 40000)
+        {
+            level.shared_vo_trigger[trigger] = gettime();
+            level.shared_vo_check_at = gettime() + 10000;
+            level thread shared_story_vo_check(level.shared_vo_check_at);
+        }
+    }
+}
+
+// At the check: in zombie blood or not (the clue's own test is the player's zombie_powerup_zombie_blood_on)
+shared_story_vo_check(at)
+{
+    level endon("end_game");
+    wait (at - gettime()) / 1000;
+    p = level.segment_player;
+    level.shared_vo_check_blood = isdefined(p) && is_true(p.zombie_vars["zombie_powerup_zombie_blood_on"]);
+    level.shared_vo_check_done = gettime();
+}
+
+shared_story_vo_text(y, scale)
+{
+    hud = newclienthudelem(self);
+    hud.horzalign = "left";
+    hud.vertalign = "middle";
+    hud.alignx = "left";
+    hud.aligny = "middle";
+    hud.x = 14;
+    hud.y = y;
+    hud.font = "objective";
+    hud.fontscale = scale;
+    hud.foreground = 1;
+    hud.sort = 100;
+    hud.hidewheninmenu = 0;
+    return hud;
+}
+
+// A spot 90 units from the generator toward its craft table, facing the generator (the B2EE lock rig's placement)
+shared_gen_spot(name)
+{
+    gen = level.zone_capture.zones[name];
+    table = undefined;
+    foreach(stub in level.a_uts_craftables)
+    {
+        if(stub.equipname != "open_table") continue;
+        if(!isdefined(table) || distancesquared(stub.origin, gen.origin) < distancesquared(table.origin, gen.origin))
+            table = stub;
+    }
+    dir = vectornormalize((table.origin[0] - gen.origin[0], table.origin[1] - gen.origin[1], 0));
+    spot = spawnstruct();
+    spot.origin = groundpos(gen.origin + dir * 90 + (0, 0, 40));
+    angles = vectortoangles(gen.origin - spot.origin);
+    spot.angles = (0, angles[1], 0);
+    return spot;
+}
+
 shared_generators()
 {
     generators = getstructarray("s_generator", "targetname");
@@ -948,7 +1545,9 @@ shared_get_parts()
 	self maps\mp\zombies\_zm_craftables::player_get_craftable_piece("elemental_staff_water", "middle_staff");
 	self maps\mp\zombies\_zm_craftables::player_get_craftable_piece("elemental_staff_water", "lower_staff");
 
-    // Panzer and Gen 6 parts; the middle one comes from the plane.
+    // Panzer and Gen 6 parts; the middle one comes from the plane. Their clues are behind the route.
+    level.shared_story_heard["sam_clue_mechz"] = true;
+    level.shared_story_heard["sam_clue_zonecap"] = true;
     self maps\mp\zombies\_zm_craftables::player_get_craftable_piece("elemental_staff_fire", "upper_staff");
 	if(!ice_route || get_cfg_int("plane_part"))
     self maps\mp\zombies\_zm_craftables::player_get_craftable_piece("elemental_staff_fire", "middle_staff");
@@ -1639,25 +2238,14 @@ shared_waittill_dug(s_dig_spot)
 				}
 				n_good_chance = 70;
 			}
-			if(flag("ee_mech_zombie_hole_opened") && !level.dig_n_zombie_bloods_spawned)
+			// level.shared_dig_zombie_blood: a mode that wants the first dig's zombie blood early (Maxis Quote Skip)
+			if((flag("ee_mech_zombie_hole_opened") || is_true(level.shared_dig_zombie_blood)) && !level.dig_n_zombie_bloods_spawned)
 			{
-				powerup = spawn( "script_model", self.origin );
-				powerup endon( "powerup_grabbed" );
-				powerup endon( "powerup_timedout" );
-
+				// Threaded like vanilla rewards, so the pile goes at once (the inline version held it 0.6 s)
 				level.dig_n_zombie_bloods_spawned++;
 				level.dig_n_powerups_spawned++;
 				level.dig_last_prize_rare = 0;
-				player maps\mp\zm_tomb_dig::dig_reward_dialog( "dig_powerup" );
-
-				powerup maps\mp\zombies\_zm_powerups::powerup_setup( "zombie_blood" );
-				powerup movez( 40, 0.6 );
-
-				powerup waittill( "movedone" );
-
-				powerup thread maps\mp\zombies\_zm_powerups::powerup_timeout();
-				powerup thread maps\mp\zombies\_zm_powerups::powerup_wobble();
-				powerup thread maps\mp\zombies\_zm_powerups::powerup_grab();
+				self thread shared_dig_up_zombie_blood(player);
 			}
 			else if ( player.dig_vars["n_losing_streak"] == 3 )
 			{
@@ -1704,6 +2292,21 @@ shared_waittill_dug(s_dig_spot)
 			return;
 		}
 	}
+}
+
+// The dig's zombie blood (shared_waittill_dug), on its own thread
+shared_dig_up_zombie_blood(player)
+{
+    player maps\mp\zm_tomb_dig::dig_reward_dialog( "dig_powerup" );
+    powerup = spawn( "script_model", self.origin );
+    powerup endon( "powerup_grabbed" );
+    powerup endon( "powerup_timedout" );
+    powerup maps\mp\zombies\_zm_powerups::powerup_setup( "zombie_blood" );
+    powerup movez( 40, 0.6 );
+    powerup waittill( "movedone" );
+    powerup thread maps\mp\zombies\_zm_powerups::powerup_timeout();
+    powerup thread maps\mp\zombies\_zm_powerups::powerup_wobble();
+    powerup thread maps\mp\zombies\_zm_powerups::powerup_grab();
 }
 
 // OVERRIDE: maps\mp\zm_tomb_distance_tracking::zombie_tracking_init, segment
@@ -2165,6 +2768,7 @@ shared_segment_item_defaults(settings_ar)
 	foreach(key in combinearrays(shared_vinyl_keys(), array("maxis_body", "maxis_engine")))
 		settings_ar[key] = shared_part_collected_value(key);
 	settings_ar["maxis_drone_crafted"] = 1;      // Pre-Wind on: 1 crafts and gives the drone (route default), 0 leaves it uncrafted
+	settings_ar["quote_lock"] = QUOTE_LOCK_FULL; // starts after round 8: the lock is in (shared_quote_lock)
 	return settings_ar;
 }
 
@@ -2298,6 +2902,7 @@ shared_build_segment_menus(show_disc_turn = false, show_skip_first = false)
 {
     self shared_build_parts_menu("loadout");
     self shared_build_vinyls_menu("loadout");
+    shared_add_quote_lock_row("puzzles");
     self shared_build_disc_menu("puzzles", show_disc_turn, show_skip_first);
     self puzzle_rng_build_menus("puzzles");
     self shared_build_relays_menu("puzzles");
@@ -3064,6 +3669,7 @@ shared_segment()
     segment = spawnstruct();
     segment.staffs = [];                    // staffs the setup completes (shared_staff_install)
     segment.tank_trips = 2;                 // shared_tank_setup_trips
+    segment.story_release = "segment_ready"; // flag of the release: story lines play natively from it (shared_story_install)
     segment.excluded_doors = undefined;     // doors left closed (shared_open_doors)
     segment.open_mound = true;              // false: the mound stays closed for the player, with native timing
     segment.leave_gramophone = false;       // shared_open_mound
@@ -3125,6 +3731,7 @@ shared_segment_install(segment)
     flag_init("shared_tank_setup_done"); // Set when the setup trips are done.
     shared_schedules_init(11); // The route's skip pushes the first Templars to round 11.
     shared_segment_replacefuncs();
+    shared_story_install();
     shared_mechz_delay_install();
     // The fast unlock shortens the opening: only for a mound the setup opens.
     if(segment.open_mound) replacefunc( maps\mp\zm_tomb_main_quest::run_gramophone_door, ::shared_fast_mound_unlock );

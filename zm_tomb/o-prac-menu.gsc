@@ -25,6 +25,8 @@
 #include scripts\zm\origins_menu\preice;
 #include scripts\zm\origins_menu\prelightning;
 #include scripts\zm\origins_menu\prewind;
+#include scripts\zm\origins_menu\quoteskip;
+#include scripts\zm\origins_menu\quoteskipwind;
 #include scripts\zm\origins_menu\segmentutil;
 #inline scripts\zm\origins_menu\oprac;
 
@@ -48,6 +50,8 @@ register_modes()
 	mode_timer(register_mode("endingprac",     "Ending",          ::endingprac_initialize,     ::shared_run_segment, ::endingprac_build_menu), true, SPLIT_FREEDOM);
 	mode_timer(register_mode("hundredkills",   "Raise Hell",      ::hundredkills_initialize,   ::shared_run_segment, ::hundredkills_build_menu), true, SPLIT_FREEDOM);
 	register_mode("genprac",        "Gens",            ::genprac_initialize,        ::genprac_run,        ::genprac_build_menu);
+	mode_timer(register_mode("quoteskipwind",  "Quote Skip: Wind", ::quoteskipwind_initialize, ::shared_run_segment, ::quoteskipwind_build_menu), true, SPLIT_ICE);
+	mode_timer(register_mode("quoteskip",      "Quote Skip: Plane/Panzer", ::quoteskip_initialize, ::shared_run_segment, ::quoteskip_build_menu), true, SPLIT_ICE);
 
 	// Template for new modes (origins_menu\examplemode.gsc); uncomment it and its
 	// #include to try it.

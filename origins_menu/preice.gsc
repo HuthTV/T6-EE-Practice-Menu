@@ -69,6 +69,7 @@ preice_segment()
     // Pre-Ice's own start (Peek Code) instead of the held start. The player is
     // held from the spawn, before the black screen ends, until setup is done.
     segment.on_spawn = ::preice_hold_controls;
+    segment.story_release = "preice_ready";
     segment.start = ::preice_start;
     segment.setup = ::preice_setup;
     return segment;
