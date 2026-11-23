@@ -269,6 +269,20 @@ fullgame_box_no_stock_mp40()
 
 // Every gun the box can give on Origins, for the Hit 1 and Hit 2 settings. The
 // saved value is the index; 0 is random.
+// The Hit pages list random, the SCAR and the Mark II first (user, 2026-11-10),
+// then the rest in option order.
+fullgame_box_hit_order(options)
+{
+	order = array(0);
+	top = array("scar_zm", "raygun_mark2_zm");
+	foreach(weapon in top)
+		for(i = 1; i < options.weapons.size; i++)
+			if(options.weapons[i] == weapon) order[order.size] = i;
+	for(i = 1; i < options.weapons.size; i++)
+		if(!isinarray(top, options.weapons[i])) order[order.size] = i;
+	return order;
+}
+
 fullgame_box_hit_options()
 {
 	options = spawnstruct();
@@ -359,16 +373,17 @@ fullgame_build_menu(root)
 			add_cfg_toggle(digs, "Points Always 250", "250_digs");
 
 		box = add_submenu(randomness, "box", "Mystery Box", "Box");
-			add_cfg_choice(box, "Location", "box_location", array("random", "gen 3", "gen 2"));
+			add_cfg_choice(box, "Location", "box_location", array("random", "Gen 3", "Gen 2"));
 			add_cfg_choice(box, "Box Tier", "box_tier", array("normal", "S", "A", "B", "C", "D", "MK2"));
 			add_cfg_toggle(box, "MP40 No Stock", "box_no_stock_mp40");
 			box_guns = fullgame_box_hit_options();
-			add_cfg_choice(box, "Hit 1", "box_hit_1", box_guns.labels);
-			add_cfg_choice(box, "Hit 2", "box_hit_2", box_guns.labels);
+			order = fullgame_box_hit_order(box_guns);
+			add_cfg_pick_menu(box, "box_hit_1", "Hit 1", "box_hit_1", box_guns.labels, order);
+			add_cfg_pick_menu(box, "box_hit_2", "Hit 2", "box_hit_2", box_guns.labels, order);
 
 		fizz = add_submenu(randomness, "fizz", "Wunderfizz", "Fizz");
 			perks = array("^1r^3a^2n^5d^4o^1m ^3p^2e^5r^4k", "^3Double Tap", "^2Speed Cola", "^8Deadshot", "^1Juggernog", "^3Stamin-Up", "^2Mule Kick", "^6PhD Flopper", "^9Electric Cherry", "^5Quick Revive");
-			add_cfg_choice(fizz, "Location", "fizz_location", array("random", "gen 4", "gen 5"));
+			add_cfg_choice(fizz, "Location", "fizz_location", array("random", "Gen 4", "Gen 5"));
 			add_cfg_choice(fizz, "Fizz 1", "fizz_1", perks);
 			add_cfg_choice(fizz, "Fizz 2", "fizz_2", perks);
 

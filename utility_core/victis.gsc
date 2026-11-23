@@ -97,8 +97,19 @@ victis_fridge_rows()
 
     options = victis_fridge_options();
     rows = [];
+    top = [];
     for(i = 0; i < options.weapons.size; i++)
-        if(victis_fridge_available(options.weapons[i])) rows[rows.size] = i;
+    {
+        if(!victis_fridge_available(options.weapons[i])) continue;
+        if(victis_fridge_on_top(options.weapons[i])) top[top.size] = i;
+        else rows[rows.size] = i;
+    }
+    // The map's own gun first, Pack-a-Punched before plain (Buried's MTAR, user 2026-11-10).
+    first = [];
+    for(pass = 0; pass < 2; pass++)
+        foreach(i in top)
+            if(issubstr(options.weapons[i], "_upgraded") == (pass == 0)) first[first.size] = i;
+    rows = combinearrays(first, rows);
     level.victis_fridge_shown = rows;
     return rows;
 }
@@ -249,6 +260,14 @@ victis_apply_permaperks()
 /*##############################################################################
                               Fridge
 ##############################################################################*/
+// Whether the weapon is the map's victis_fridge_top gun (any attachment, PaP or not).
+victis_fridge_on_top(weapon)
+{
+    gun = level.practice_map.victis_fridge_top;
+    if(!isdefined(gun)) return false;
+    return weapon == gun + "_zm" || issubstr(weapon, gun + "_upgraded_zm");
+}
+
 // Every weapon of the B2EE timer's fridge_list.md. The saved value is the index:
 // keep the order and add new weapons at the end. The menu lists the ones the
 // fridge hands out on this map (victis_fridge_available). Built once.

@@ -430,6 +430,28 @@ add_cfg_toggle(menu, label, key, on_text, off_text)
 	create_option(menu, label + ": " + cfgint_compare(key, on_text, off_text), ::cfg_toggle_binary, key);
 }
 
+// A setting picked from a page of its own, for long lists such as guns: the row
+// shows the choice and opens the page, which lists names in order (indexes into
+// names, all in index order when undefined) with the choice in yellow. The saved
+// value is the index, so order changes only the page.
+add_cfg_pick_menu(parent, id, label, key, names, order)
+{
+	choice = get_cfg_int(key);
+	if(choice < 0 || choice >= names.size) choice = 0;
+	menu = add_submenu(parent, id, label + ": ^3" + names[choice], label);
+	if(!isDefined(order))
+	{
+		order = [];
+		for(i = 0; i < names.size; i++) order[i] = i;
+	}
+	foreach(i in order)
+	{
+		text = names[i];
+		if(i == choice) text = "^3" + text;
+		create_option(menu, text, ::cfg_set_int, key, i);
+	}
+}
+
 // A setting that steps through names; the saved value is the index into names.
 add_cfg_choice(menu, label, key, names)
 {
