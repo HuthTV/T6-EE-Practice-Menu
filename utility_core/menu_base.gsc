@@ -354,6 +354,7 @@ build_cheats_menu(root)
 		create_option(cheats, "Demigod: " + int_compare(self.demigod), ::toggle_demigod);
 		create_option(cheats, "Docile Zombies: " + int_compare(self.docile), ::toggle_docile);
 		create_option(cheats, "Zombie Spawns: " + int_compare(flag("spawn_zombies")), ::toggle_zombie_spawns);
+		add_cfg_toggle(cheats, "Follow Throws", "follow_throws");
 		drops = add_submenu(cheats, "drops", "Give Drop");
 			add_drop_option(drops, "Nuke", "nuke");
 			add_drop_option(drops, "Max Ammo", "full_ammo");

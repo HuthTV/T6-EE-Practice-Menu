@@ -101,6 +101,7 @@ on_player_spawned_menu()
 	{
 		self waittill("spawned_player");
         self thread basegame_health_damage_monitor();
+        self thread basegame_follow_throws_watch();
 
 		if(!isDefined(self.has_menu))
 		{
@@ -123,6 +124,87 @@ on_player_spawned_menu()
 				self thread basegame_speedometer();
 		}
 	}
+}
+
+/*##############################################################################
+                              Follow Throws (Cheats, every map and mode)
+##############################################################################*/
+// Follow Throws (user, 2026-11-23, follow_throws in basegame.cfg, applies at once): the player rides every
+// grenade they throw (basegame_follow_throw_weapons) and is put back where they threw it from. Claymores and the
+// Sliquifier also notify grenade_fire, so only throwables are followed.
+basegame_follow_throws_watch()
+{
+    self endon("disconnect");
+    self notify("follow_throws_watch");
+    self endon("follow_throws_watch");
+
+    while(true)
+    {
+        self waittill("grenade_fire", grenade, weapname);
+        if(!get_cfg_int("follow_throws") || !isdefined(grenade) || !isdefined(weapname)) continue;
+        if(!isinarray(basegame_follow_throw_weapons(), weapname)) continue;
+        self thread basegame_follow_throw(grenade, true);
+    }
+}
+
+// Lethal and tactical grenades of the five maps (vanilla names).
+basegame_follow_throw_weapons()
+{
+    return array("frag_grenade_zm", "sticky_grenade_zm", "beacon_zm", "cymbal_monkey_zm", "emp_grenade_zm", "willy_pete_zm");
+}
+
+// Promod's nade training (first in Origins Gen practice): the player rides a script model that follows the
+// grenade, so the camera stays on its flight, upright, with free look. The out-of-playable-area
+// monitor is off and the player invulnerable for the ride (they sit on their own frag). Once the grenade lands,
+// explodes or is gone, the player waits 2 s there and, with return_after, goes back to the throw spot.
+basegame_follow_throw(grenade, return_after)
+{
+    self endon("disconnect");
+
+    if(is_true(self.following_throw)) return;
+    self.following_throw = true;
+
+    throw_origin = self.origin;
+    throw_angles = self getplayerangles();
+
+    self notify("stop_player_out_of_playable_area_monitor");
+    self enableinvulnerability();
+
+    // The mount never rotates: linked to the grenade it took on a frag's spin and turned the view and the body
+    // upside down (view fraction 0 did not stop it). It takes the grenade's position every server frame, set
+    // directly: a moveto every frame rubber banded.
+    mover = spawn("script_model", grenade.origin);
+    mover setmodel("tag_origin");
+    mover.angles = (0, throw_angles[1], 0);
+    self playerlinktodelta(mover, "tag_origin", 1, 180, 180, 85, 85);
+    self setplayerangles(throw_angles);
+
+    grenade thread basegame_follow_throw_land();
+    while(isdefined(grenade) && !is_true(grenade.follow_landed))
+    {
+        mover.origin = grenade.origin;
+        wait 0.05;
+    }
+    wait 2;
+
+    self unlink();
+    mover delete();
+    if(return_after)
+    {
+        self setorigin(throw_origin);
+        self setplayerangles(throw_angles);
+    }
+    wait 0.5; // The frag's blast is over before the player can be hurt again
+    self disableinvulnerability();
+    self thread maps\mp\zombies\_zm::player_out_of_playable_area_monitor();
+    self.following_throw = undefined;
+}
+
+basegame_follow_throw_land()
+{
+    self endon("death");
+    self waittill("stationary");
+    self.follow_landed = true;
 }
 
 basegame_initialize()
@@ -173,6 +255,7 @@ basegame_default_cfg()
     settings_ar["hud_oopa"] = 1; // OOPA Countdown: 0 off, 1 on, 2 the map's spot only (Origins: R2L)
     settings_ar["show_identifier"] = 1; // Plutonium's session identifier and script hashes (user, 2026-11-02).
     settings_ar["menu_key"] = 0; // The key that opens the menu with melee: 0 special grenade (user, 2026-11-02), 1 dpad slot 1 (the shield).
+    settings_ar["follow_throws"] = 0; // Cheats: ride every thrown grenade, then back to the throw spot (user, 2026-11-23).
     settings_ar["player_character"] = 0; // 0 as vanilla picks, else 1 + the characterindex (user, 2026-11-06).
     for(i = 2; i <= 4; i++)
         settings_ar["player_character_" + i] = 0; // Co-op clients by player slot (user, 2026-11-10).

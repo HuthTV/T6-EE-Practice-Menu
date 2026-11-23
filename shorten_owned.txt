@@ -246,6 +246,7 @@ buried_start_round
 disable_godmode
 docile_off
 endingemp_ready
+follow_throws_watch
 fullgame_fist_of_iron_nuke_dropped
 menu_active
 practice_health_damage_monitor

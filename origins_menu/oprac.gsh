@@ -169,4 +169,3 @@
 #define THROW_OFF       0
 #define THROW_TELEPORT  1   // Teleport to where the G-strike lands.
 #define THROW_FOLLOW    2   // Ride the G-strike in flight, then go back to the throw spot.
-#define THROW_FOLLOW_RETURN_DELAY 2 // Seconds at the landing spot before going back.
