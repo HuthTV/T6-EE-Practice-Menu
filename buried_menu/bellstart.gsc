@@ -34,7 +34,13 @@ bellstart_run()
     start.spot = BELLSTART_SPOT;
     start.past_lamp = true;
     start.side = BURIED_SIDE_MAXIS;
-    start.first_split = BURIED_SPLIT_SHARPSHOOTER;
+    if(get_cfg_int("springpad_placed"))
+    {
+        start.springpad = BURIED_BELL_SPRINGPAD;
+        start.springpad_angles = BURIED_BELL_SPRINGPAD_ANGLES;
+    }
+    else start.springpad_hand = true;
+    start.first_split = BURIED_SPLIT_BELLS_LEVERS;
     buried_start_run(start);
 }
 
@@ -43,6 +49,7 @@ bellstart_build_menu(root)
     settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
         practice_custom_time_menu(settings);
         create_option(settings, "Zombies Left: ^3" + get_cfg_int("start_zombies"), ::cfg_increment_int, "start_zombies", array(1, 3));
+        add_cfg_toggle(settings, "Trample Steam", "springpad_placed", "^2placed", "^3in hand");
 }
 
 bellstart_default_cfg()
@@ -51,5 +58,6 @@ bellstart_default_cfg()
     settings_ar = practice_custom_time_defaults(settings_ar);
     settings_ar = buried_quest_defaults(settings_ar);
     settings_ar["start_zombies"] = 2;
+    settings_ar["springpad_placed"] = 1;
     return settings_ar;
 }

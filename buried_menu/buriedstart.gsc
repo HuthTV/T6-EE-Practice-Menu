@@ -20,15 +20,19 @@
 //   round         the round the player starts on
 //   zombies       zombies left in it, undefined for a full round
 //   spot          where the player starts, undefined for the oil lamp marker
+//   angles        the view the player starts with (log one with z_tools/position_hud.gsc, chat !pos)
 //   past_lamp     the lamp is built and the stages go on up to ip (maze or bells)
 //   fountain_bomb a time bomb set on the fountain that starts Sharpshooter
 //   first_split   the next split (BURIED_SPLIT_*)
+//   springpad     a built Trample Steam placed here (origin), with springpad_angles,
+//                 or with springpad_hand true and no origin, held instead of placed
 // Setup runs frozen and invulnerable at timescale 10, with a deadline. Open with the
-// user: the loadout (Paralyzer, Time Bomb, Bowie, Vulture Aid for Richtofen) is a guess.
+// user: the loadout (Paralyzer, MP5, Time Bomb, Galvaknuckles, Vulture Aid for Richtofen) is partly a guess.
 
 #define BURIED_START_DEADLINE_MS  300000    // Game time.
 #define BURIED_LAMP_MARKER        (-275, -1160, 201) // generator_use_trigger
 #define BURIED_START_TIMESCALE    10
+#define BURIED_START_WATCHDOG_MS  5000      // Past the deadline, game time.
 
 buried_start()
 {
@@ -71,6 +75,7 @@ buried_start_setup(start)
     self freezecontrols(1);
     was_demigod = is_true(self.demigod);
     if(!was_demigod) self toggle_demigod();
+    self thread buried_start_watchdog(deadline, was_demigod);
 
     // A side finished last game has its tower pieces removed (zm_buried_sq).
     if(is_true(level.richcompleted) || is_true(level.maxcompleted))
@@ -79,15 +84,15 @@ buried_start_setup(start)
     self buried_start_loadout(start);
     self thread open_all_doors();
 
-    iprintln("Quest setup: tower");
+    buried_start_stage("tower");
     self buried_start_build_tower(start.side);
     buried_start_wait_stage("mta", deadline);
 
-    iprintln("Quest setup: amplifiers");
+    buried_start_stage("amplifiers");
     buried_start_amplifiers(start.side);
     buried_start_wait_stage("gl", deadline);
 
-    iprintln("Quest setup: lantern");
+    buried_start_stage("lantern");
     while(!isdefined(level.vh_lantern) && gettime() < deadline) wait 0.05;
     self buried_start_take_lantern();
     buried_start_wait_stage("ftl", deadline);
@@ -96,19 +101,81 @@ buried_start_setup(start)
 
     if(start.past_lamp) self buried_start_past_lamp(start.side, deadline);
 
+    if(isdefined(start.springpad) || is_true(start.springpad_hand))
+    {
+        buried_start_stage("Trample Steam");
+        self buried_start_springpad(start.springpad, start.springpad_angles);
+    }
+
     self buried_start_place(start);
 
-    iprintln("Quest setup: round");
+    buried_start_stage("round");
     while(!flag("buried_start_round") && gettime() < deadline) wait 0.05;
     while(!get_current_zombie_count() && gettime() < deadline) wait 0.05;
 
     setdvar("timescale", 1);
     wait 0.5; // Normal speed for 500 ms before the player can move.
     if(is_true(start.fountain_bomb)) self buried_start_fountain_bomb();
+    level notify("buried_start_released");
     self freezecontrols(0);
     if(!was_demigod) self toggle_demigod();
     practice_custom_time_start_clock();
     level thread buried_split_timer(start.first_split);
+}
+
+// A script error ends the setup thread with the player still frozen. This one
+// releases the player soon after the deadline and names the step it stopped at.
+buried_start_watchdog(deadline, was_demigod)
+{
+    self endon("disconnect");
+    level endon("buried_start_released");
+    while(gettime() < deadline + BURIED_START_WATCHDOG_MS) wait 0.05;
+    stage = "start";
+    if(isdefined(level.buried_start_stage)) stage = level.buried_start_stage;
+    iprintln("^1Quest setup stuck at " + stage + ": released anyway");
+    println("B-Prac: setup stuck at " + stage + ", quest stage " + level._cur_stage_name);
+    setdvar("timescale", 1);
+    self freezecontrols(0);
+    if(!was_demigod && is_true(self.demigod)) self toggle_demigod();
+}
+
+// The setup message, also kept for the watchdog.
+buried_start_stage(name)
+{
+    if(!isdefined(level.buried_start_t0)) level.buried_start_t0 = gettime();
+    level.buried_start_stage = name;
+    seconds = (gettime() - level.buried_start_t0) / 1000;
+    iprintln("Quest setup: " + name + " (" + seconds + " s)");
+    println("B-Prac: setup " + name + " at " + seconds + " s game time");
+}
+
+// The Trample Steam built on its table, then placed as vanilla
+// equipment_drop_to_planted does, but at the spot instead of the player's feet.
+buried_start_springpad(spot, angles)
+{
+    equipment = "equip_springpad_zm";
+    foreach(stub in level.buildable_stubs)
+        if(stub.equipname == "springpad_zm" && !is_true(stub.built))
+            stub maps\mp\zombies\_zm_buildables::buildablestub_finish_build(self);
+    wait 0.05;
+    self maps\mp\zombies\_zm_equipment::equipment_buy(equipment);
+    wait 0.05;
+    if(!isdefined(spot)) return; // Held.
+    if(isdefined(self.current_equipment) && self.current_equipment == equipment)
+        self maps\mp\zombies\_zm_equipment::equipment_to_deployed(equipment);
+    item = self [[ level.zombie_equipment[equipment].place_fn ]](spot, angles);
+    if(!isdefined(item))
+    {
+        iprintln("^1Trample Steam could not be placed");
+        return;
+    }
+    item.owner = self;
+    item.original_owner = self;
+    item.name = equipment;
+    if(isdefined(level.equipment_planted)) self [[ level.equipment_planted ]](item, equipment, self);
+    self notify("equipment_placed", item, equipment);
+    self maps\mp\zombies\_zm_buildables::track_buildables_planted(item);
+    print("B-Prac: Trample Steam at " + spot);
 }
 
 // As a stage is announced: vanilla sets the name in every init_stage.
@@ -118,11 +185,17 @@ buried_start_wait_stage(name, deadline)
     if(gettime() >= deadline) iprintln("^1Quest setup timed out at " + name);
 }
 
+// Paralyzer and MP5 on both sides (user, 2026-11-10). The starting guns go first:
+// vanilla weapon_give takes the current gun when the player already holds the
+// weapon limit, which would drop one of the two.
 buried_start_loadout(start)
 {
+    foreach(weapon in self getweaponslistprimaries())
+        self takeweapon(weapon);
     self maps\mp\zombies\_zm_weapons::weapon_give("slowgun_zm", undefined, undefined, 0);
-    self giveweapon("bowie_knife_zm");
-    self maps\mp\zombies\_zm_melee_weapon::change_melee_weapon("bowie_knife_zm", self getcurrentweapon());
+    self maps\mp\zombies\_zm_weapons::weapon_give("mp5k_zm", undefined, undefined, 0);
+    self giveweapon("tazer_knuckles_zm");
+    self maps\mp\zombies\_zm_melee_weapon::change_melee_weapon("tazer_knuckles_zm", self getcurrentweapon());
     if(self hasweapon("knife_zm")) self takeweapon("knife_zm");
     self maps\mp\zombies\_zm_melee_weapon::trigger_hide_all();
     self maps\mp\zombies\_zm_weap_time_bomb::player_give_time_bomb();
@@ -199,6 +272,7 @@ buried_start_take_lantern()
 // of its own to wait for here.
 buried_start_past_lamp(side, deadline)
 {
+    buried_start_stage("lamp");
     flag_set("sq_wisp_success");
     wait 0.05;
     self maps\mp\zombies\_zm_buildables::player_build(level.sq_lamp_generator_unitrig.buildablezone);
@@ -226,8 +300,7 @@ buried_start_past_lamp(side, deadline)
 // here, last thing before the release, so the detonator comes back to this moment.
 buried_start_fountain_bomb()
 {
-    spot = getstruct("sq_ows_fountain", "targetname");
-    bomb = self magicgrenadetype("time_bomb_zm", groundpos(spot.origin + (0, 0, 64)) + (0, 0, 8), (0, 0, 0), 0);
+    bomb = self magicgrenadetype("time_bomb_zm", groundpos(BURIED_FOUNTAIN_BOMB + (0, 0, 64)) + (0, 0, 8), (0, 0, 0), 0);
     bomb thread maps\mp\zombies\_zm_weap_time_bomb::setup_time_bomb_detonation_model();
     maps\mp\zombies\_zm_weap_time_bomb::time_bomb_saves_data();
     bomb maps\mp\zombies\_zm_weap_time_bomb::time_bomb_model_init();
@@ -248,5 +321,6 @@ buried_start_place(start)
     print("B-Prac: start at " + spot);
     self setorigin(spot);
     facing = vectortoangles(BURIED_LAMP_MARKER - spot);
-    if(!isdefined(start.spot)) self setplayerangles((0, facing[1], 0));
+    if(isdefined(start.angles)) self setplayerangles(start.angles);
+    else if(!isdefined(start.spot)) self setplayerangles((0, facing[1], 0));
 }

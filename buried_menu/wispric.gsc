@@ -29,6 +29,9 @@ wispric_run()
 {
     start = buried_start();
     start.side = BURIED_SIDE_RICHTOFEN;
+    start.spot = BURIED_WISP_SPOT;
+    start.angles = BURIED_WISP_ANGLES;
+    start.first_split = BURIED_SPLIT_CIPHER; // The lamp is not crafted yet.
     buried_start_run(start);
 }
 
@@ -36,7 +39,7 @@ wispric_build_menu(root)
 {
     settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
         practice_custom_time_menu(settings);
-        buried_sign_menu(settings);
+        buried_sign_menu(settings, "ric");
         buried_fork_menu(settings);
 }
 

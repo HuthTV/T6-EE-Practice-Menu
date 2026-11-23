@@ -8,13 +8,13 @@
 /*##############################################################################
                               Buried split timer
 ##############################################################################*/
-// The B2EE timer's solo Buried splits (wait_for_split), the same on either side,
-// drawn by the core split timer. Splits run from first to Sharpshooter, each case
+// The B2EE timer's solo Buried splits (wait_for_split), drawn by the core split timer.
+// Bells (Maxis) or Levers (Richtofen) is named by the tower, built before it. Splits run from first to Sharpshooter, each case
 // falls through to the next.
 buried_split_timer(first)
 {
     level endon("end_game");
-    labels = array("^3Boxhit ^7", "^3Ghosts ^7", "^3Cipher ^7", "^3Time Travel ^7", "^3Sharpshooter ^7");
+    labels = array("^3Boxhit ^7", "^3Ghosts ^7", "^3Cipher ^7", "^3Time Travel ^7", "^3Bells/Levers ^7", "^3Sharpshooter ^7");
     practice_splits_start(labels, first);
 
     switch(first)
@@ -31,6 +31,20 @@ buried_split_timer(first)
         case BURIED_SPLIT_TIME_TRAVEL:
             while(!flag("sq_tpo_special_round_active") && !flag("sq_wisp_saved_with_time_bomb")) wait 0.05;
             practice_split(BURIED_SPLIT_TIME_TRAVEL);
+        case BURIED_SPLIT_BELLS_LEVERS:
+            if(flag("sq_is_max_tower_built"))
+            {
+                level.split_labels[BURIED_SPLIT_BELLS_LEVERS] = "^3Bells ^7";
+                flag_wait("sq_ip_puzzle_complete");
+            }
+            else
+            {
+                // Every maze lever pulled once, right or wrong.
+                level.split_labels[BURIED_SPLIT_BELLS_LEVERS] = "^3Levers ^7";
+                lever_count = getstructarray("sq_maze_lever", "targetname").size;
+                while(!isdefined(level.sq_ml_curr_lever) || level.sq_ml_curr_lever < lever_count) wait 0.05;
+            }
+            practice_split(BURIED_SPLIT_BELLS_LEVERS);
         case BURIED_SPLIT_SHARPSHOOTER:
             level waittill_any("sq_richtofen_complete", "sq_maxis_complete");
             practice_split(BURIED_SPLIT_SHARPSHOOTER);

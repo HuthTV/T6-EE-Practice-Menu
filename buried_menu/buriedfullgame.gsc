@@ -25,10 +25,6 @@
 #define CORPSES           4     // Vanilla get_randomized_corpse_list has four bodies.
 #define VULTURE_AID       "specialty_nomotionsensor"
 
-#define SIDE_RANDOM       0
-#define SIDE_NORTH_WEST   1
-#define SIDE_SOUTH_EAST   2
-
 #define BELLS             9     // sq_bp_button structs, script_string light_01 to light_09.
 
 buriedfullgame_initialize()
@@ -37,10 +33,9 @@ buriedfullgame_initialize()
     replacefunc(maps\mp\zombies\_zm_powerups::free_perk_powerup, ::buriedfullgame_free_perk_powerup);
     replacefunc(maps\mp\zm_buried_sq_tpo::setup_random_corpse_positions, ::buriedfullgame_setup_random_corpse_positions);
     replacefunc(maps\mp\zm_buried_sq_tpo::item_is_on_corpse, ::buriedfullgame_item_is_on_corpse);
-    replacefunc(maps\mp\zm_buried_sq_ip::sq_ml_spawn_lever, ::buriedfullgame_sq_ml_spawn_lever);
-    replacefunc(maps\mp\zm_buried_sq_ip::sq_ml_puzzle_logic, ::buriedfullgame_sq_ml_puzzle_logic);
     replacefunc(maps\mp\zm_buried_sq_ip::sq_bp_start_puzzle_lights, ::buriedfullgame_sq_bp_start_puzzle_lights);
     buried_quest_install();
+    buried_maze_install();
     victis_box_install(::buriedfullgame_box_gun_due);
     victis_max_install("infinity_max");
     level.buriedfullgame_ghost_perks = 0;
@@ -63,7 +58,7 @@ buriedfullgame_run()
     level thread buriedfullgame_infinity_max();
 
     flag_wait("initial_blackscreen_passed");
-    buriedfullgame_lock_maze();
+    buried_lock_maze();
     flag_set("menu_active");
     level thread buried_split_timer(BURIED_SPLIT_BOXHIT);
 }
@@ -81,12 +76,7 @@ buriedfullgame_default_cfg()
     settings_ar["switch_found"] = 0;
     settings_ar["percent_bodies"] = 1;
     settings_ar["infinity_max"] = 0;
-    settings_ar["maze_layout"] = 0;
-    foreach(color in buriedfullgame_switch_colors())
-    {
-        settings_ar["switch_side_" + color] = SIDE_RANDOM;
-        settings_ar["switch_order_" + color] = 0;
-    }
+    settings_ar = buried_maze_defaults(settings_ar);
     settings_ar = buried_quest_defaults(settings_ar);
     for(i = 1; i <= BELLS; i++)
         settings_ar["bell_" + i] = 0;
@@ -115,18 +105,15 @@ buriedfullgame_build_menu(root)
             add_cfg_toggle(special, "Max After Round Infinity", "infinity_max");
 
         maze = add_submenu(settings, "maze", "Switches");
-            add_cfg_choice(maze, "Layout", "maze_layout", array("random", "1", "2", "3", "4", "5", "6"));
-            colors = buriedfullgame_switch_colors();
-            labels = array("Red", "Green", "Blue", "Yellow");
-            for(i = 0; i < colors.size; i++)
-                add_cfg_choice(maze, labels[i] + " Side", "switch_side_" + colors[i], array("random", "N / W", "S / E"));
-            for(i = 0; i < colors.size; i++)
-                add_cfg_choice(maze, labels[i] + " Order", "switch_order_" + colors[i], array("random", "1st", "2nd", "3rd", "4th"));
+            buried_maze_menu(maze);
 
-        wisp = add_submenu(settings, "wisp", "Signs & Wisp", "Wisp");
-            buried_sign_menu(wisp);
-            add_cfg_toggle(wisp, "Maxis Lantern Teleports", "lantern_teleports");
-            buried_fork_menu(wisp);
+        maxis = add_submenu(settings, "maxiswisp", "Maxis Signs & Wisp", "Maxis Wisp");
+            buried_sign_menu(maxis, "max");
+            add_cfg_toggle(maxis, "Lantern Teleports", "lantern_teleports");
+
+        richtofen = add_submenu(settings, "ricwisp", "Richtofen Signs & Wisp", "Richtofen Wisp");
+            buried_sign_menu(richtofen, "ric");
+            buried_fork_menu(richtofen);
 
         bells = add_submenu(settings, "bells", "Maxis Bells", "Bells");
             lights = buriedfullgame_bell_labels();
@@ -439,199 +426,64 @@ buriedfullgame_infinity_max()
 }
 
 /*##############################################################################
-                              Maze switches
-##############################################################################*/
-// Richtofen's maze lever step (zm_buried_sq_ip). Lever n sits on the wall of
-// the n-th blocker of the maze's active layout (a lever with no wall in the
-// layout stays at its own struct). Each maze change re-places the levers and
-// rolls their side, a wrong attempt resets them, the solution order is rolled
-// once when the step starts. Settings go by colour, the lever's model (struct
-// order is blue, green, red, yellow, logged live 2026-11-05).
-
-// In menu order.
-buriedfullgame_switch_colors()
-{
-    return array("red", "green", "blue", "yellow");
-}
-
-// The colour of a lever model ("p6_zm_bu_maze_switch_red").
-buriedfullgame_switch_color(model)
-{
-    foreach(color in buriedfullgame_switch_colors())
-        if(issubstr(model, color)) return color;
-    return "red";
-}
-
-// Vanilla init_maze_permutations layouts, in its order (layout 1 is the first).
-buriedfullgame_maze_layouts()
-{
-    return array( array( "blocker_1", "blocker_2", "blocker_3", "blocker_4" ), array( "blocker_5", "blocker_6", "blocker_7", "blocker_8", "blocker_9" ), array( "blocker_1", "blocker_10", "blocker_6", "blocker_4", "blocker_11" ), array( "blocker_1", "blocker_3", "blocker_4", "blocker_12" ), array( "blocker_5", "blocker_6", "blocker_12", "blocker_13" ), array( "blocker_4", "blocker_6", "blocker_14" ) );
-}
-
-// Maze layout: a one-layout list makes vanilla maze_do_perm_change always pick
-// it (it reshuffles the list at its end), so every maze change keeps that
-// layout, from the first change on.
-buriedfullgame_lock_maze()
-{
-    choice = get_cfg_int("maze_layout");
-    layouts = buriedfullgame_maze_layouts();
-    if(choice <= 0 || choice > layouts.size || !isdefined(level._maze)) return;
-
-    level._maze._perms = array(layouts[choice - 1]);
-    level._maze._cur_perm = 0;
-}
-
-// is_flip for the lever of that colour on a wall whose right vector is v_right. Side
-// N / W puts the lever on the north face of an east-west wall or the west face
-// of a north-south wall (north = +y, east = +x, to confirm in game).
-buriedfullgame_lever_flip(color, v_right)
-{
-    side = get_cfg_int("switch_side_" + color);
-    if(side != SIDE_NORTH_WEST && side != SIDE_SOUTH_EAST) return randomint(2);
-
-    if(v_right[1] * v_right[1] >= v_right[0] * v_right[0])
-        right_is_north_west = v_right[1] > 0;
-    else
-        right_is_north_west = v_right[0] < 0;
-
-    // Unflipped, vanilla offsets the lever along +right.
-    want_north_west = side == SIDE_NORTH_WEST;
-    return int(right_is_north_west != want_north_west);
-}
-
-// OVERRIDE: maps\mp\zm_buried_sq_ip::sq_ml_spawn_lever
-buriedfullgame_sq_ml_spawn_lever( n_index )
-{
-    m_lever = spawn( "script_model", ( 0, 0, 0 ) );
-    m_lever setmodel( self.model );
-    m_lever.targetname = "sq_ml_lever";
-    //MODIFIED: the lever keeps its colour for the Switches settings.
-    m_lever.buriedfullgame_color = buriedfullgame_switch_color( self.model );
-    //MODIFIED END
-
-    while ( true )
-    {
-        v_spot = self.origin;
-        v_angles = self.angles;
-
-        if ( isdefined( level._maze._active_perm_list[n_index] ) )
-        {
-            s_spot = getstruct( level._maze._active_perm_list[n_index], "script_noteworthy" );
-            v_right = anglestoright( s_spot.angles );
-            //MODIFIED: Switch side setting.
-            is_flip = buriedfullgame_lever_flip( m_lever.buriedfullgame_color, v_right );
-            //MODIFIED END
-            v_offset = vectornormalize( v_right ) * 2;
-
-            if ( is_flip )
-                v_offset = v_offset * -1;
-
-            v_spot = s_spot.origin + vectorscale( ( 0, 0, 1 ), 48.0 ) + v_offset;
-            v_angles = s_spot.angles + vectorscale( ( 0, 1, 0 ), 90.0 );
-
-            if ( is_flip )
-                v_angles = s_spot.angles - vectorscale( ( 0, 1, 0 ), 90.0 );
-
-            println( "B-Prac: " + m_lever.buriedfullgame_color + " switch on " + level._maze._active_perm_list[n_index] + " at " + v_spot + " flip " + is_flip );
-        }
-
-        m_lever.origin = v_spot;
-        m_lever.angles = v_angles;
-        level waittill( "zm_buried_maze_changed" );
-    }
-}
-
-// Solution order: a lever whose Order setting is k is the k-th to flip. Set values
-// are kept unless two switches claim the same place (the later one goes random), the
-// rest take the free places at random.
-buriedfullgame_set_lever_order(a_levers)
-{
-    n = a_levers.size;
-    taken = [];
-    order = [];
-    for(i = 0; i < n; i++)
-    {
-        c = get_cfg_int("switch_order_" + a_levers[i].buriedfullgame_color) - 1;
-        if(c >= 0 && c < n && !isdefined(taken[c]))
-        {
-            order[i] = c;
-            taken[c] = 1;
-        }
-    }
-
-    free = [];
-    for(c = 0; c < n; c++)
-        if(!isdefined(taken[c])) free[free.size] = c;
-    free = array_randomize(free);
-
-    next = 0;
-    for(i = 0; i < n; i++)
-    {
-        if(!isdefined(order[i]))
-        {
-            order[i] = free[next];
-            next++;
-        }
-        a_levers[i].n_lever_order = order[i];
-        println("B-Prac: " + a_levers[i].buriedfullgame_color + " switch is flipped " + (order[i] + 1));
-    }
-}
-
-// OVERRIDE: maps\mp\zm_buried_sq_ip::sq_ml_puzzle_logic
-buriedfullgame_sq_ml_puzzle_logic()
-{
-    a_levers = getentarray( "sq_ml_lever", "targetname" );
-    level.sq_ml_curr_lever = 0;
-    //MODIFIED: Order settings instead of array_randomize.
-    buriedfullgame_set_lever_order( a_levers );
-    //MODIFIED END
-
-    while ( true )
-    {
-        level.sq_ml_curr_lever = 0;
-        maps\mp\zm_buried_sq_ip::sq_ml_puzzle_wait_for_levers();
-        n_correct = 0;
-
-        foreach ( m_lever in a_levers )
-        {
-            if ( m_lever.n_flip_number == m_lever.n_lever_order )
-            {
-                playfxontag( level._effect["sq_spark"], m_lever, "tag_origin" );
-                n_correct++;
-                m_lever playsound( "zmb_sq_maze_correct_spark" );
-            }
-        }
-
-        if ( n_correct == a_levers.size )
-            flag_set( "sq_ip_puzzle_complete" );
-
-        level waittill( "zm_buried_maze_changed" );
-        level notify( "sq_ml_reset_levers" );
-        wait 1;
-    }
-}
-
-/*##############################################################################
                               Maxis bells
 ##############################################################################*/
 // Bell n is the n-th button the board asks for. The saved value is the light number
 // (the struct's light_0n), 0 random. A light set on an earlier row counts as random.
-// The label is the light and the zone of its button.
+// Each bell shows one word (user, 2026-11-10): its name in buriedfullgame_bell_names,
+// or until the user names it, its zone's word ("2" added while two share a zone).
+// Every bell is printed to the console so they can be named.
 buriedfullgame_bell_labels()
 {
     if(isdefined(level.buriedfullgame_bell_labels)) return level.buriedfullgame_bell_labels;
 
+    names = buriedfullgame_bell_names();
     labels = array("random");
     for(i = 1; i <= BELLS; i++)
-        labels[i] = "" + i;
+        labels[i] = "bell " + i;
+    used = [];
     foreach(button in getstructarray("sq_bp_button", "targetname"))
     {
         n = int(getsubstr(button.script_string, 6, button.script_string.size));
         zone = maps\mp\zombies\_zm_zonemgr::get_zone_from_position(button.origin + (0, 0, 32), 1);
-        if(isdefined(zone)) labels[n] = n + " " + basegame_plain_zone_name(zone);
+        if(names[n] != "")
+            labels[n] = names[n];
+        else if(isdefined(zone))
+        {
+            word = buriedfullgame_zone_word(zone);
+            if(isdefined(used[word])) word += " 2";
+            used[word] = true;
+            labels[n] = word;
+        }
+        if(!isdefined(zone)) zone = "none";
+        println("B-Prac: bell " + button.script_string + " " + zone + " " + button.origin + " shows " + labels[n]);
     }
     if(isdefined(level.zones)) level.buriedfullgame_bell_labels = labels;
     return labels;
+}
+
+// The user's names by light number (index 1-9, light_01 to light_09), named live with
+// t6r_buried_bells.gsc (user, 2026-11-10).
+buriedfullgame_bell_names()
+{
+    return array("", "Candy Chair", "Candy Pot", "Candy Table", "Stables Pitchfork", "Stables Plank", "Stables Wheel", "Court Table", "Court Witness", "Court Bench");
+}
+
+// A zone as one word for the bell rows.
+buriedfullgame_zone_word(zone)
+{
+    switch(zone)
+    {
+        case "zone_candy_store":
+        case "zone_candy_store_floor2":
+            return "candy";
+        case "zone_stables":
+            return "stables";
+        case "zone_underground_courthouse":
+        case "zone_underground_courthouse2":
+            return "courthouse";
+    }
+    return basegame_plain_zone_name(zone);
 }
 
 // a_tags in the order of the Bell rows, the rest shuffled into the free places.
