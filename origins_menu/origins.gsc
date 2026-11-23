@@ -20,8 +20,8 @@ shared_practice_map()
 {
     map = practice_map("Huth's O-Prac", "Huth's Origins Practice Tool", "O_PRAC/", "o_menu_gamemode");
     // Run splits in SPLIT_* order (oprac.gsh); Freedom, the last, always shows.
-    map.split_names = array("nml", "ice", "wind", "fire", "lightning", "freedom");
-    map.split_labels = array("NML", "Ice", "Wind", "Fire", "Lightning", "Freedom");
+    map.split_names = array("nml", "boxes", "ice", "wind", "fire", "lightning", "freedom");
+    map.split_labels = array("NML", "Boxes", "Ice", "Wind", "Fire", "Lightning", "Freedom");
     map.build_hud_top = ::shared_build_hud;
     map.build_cheats = ::shared_build_cheats;
     map.base_cfg_defaults = ::shared_base_cfg_defaults;

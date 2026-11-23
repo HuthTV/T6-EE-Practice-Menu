@@ -145,7 +145,7 @@ fullgame_run()
 		player freezecontrols(0);
 	}
     level.game_start_time = gettime();
-    level thread shared_segment_timer(int_compare(split_shown(SPLIT_NML), SPLIT_NML, SPLIT_ICE));
+    level thread shared_segment_timer(int_compare(split_shown(SPLIT_NML), SPLIT_NML, SPLIT_BOXES));
 	setDvar("timescale", 1);
 	flag_set("menu_active");
 

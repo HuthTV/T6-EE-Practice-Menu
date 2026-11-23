@@ -111,11 +111,12 @@
                               Run splits (shared_segment_timer)
 ##############################################################################*/
 #define SPLIT_NML        0
-#define SPLIT_ICE        1
-#define SPLIT_WIND       2
-#define SPLIT_FIRE       3
-#define SPLIT_LIGHTNING  4
-#define SPLIT_FREEDOM    5
+#define SPLIT_BOXES      1
+#define SPLIT_ICE        2
+#define SPLIT_WIND       3
+#define SPLIT_FIRE       4
+#define SPLIT_LIGHTNING  5
+#define SPLIT_FREEDOM    6
 
 /*##############################################################################
                               STG acquired (segment starts, "stg_start")

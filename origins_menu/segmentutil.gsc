@@ -675,7 +675,7 @@ shared_box_reward_state(name, consumed)
 shared_segment_timer(start_split, clock_start)
 {
     level endon("end_game");
-    level.segment_names = array("^2NML ^7", "^4ICE ^7", "^3WIND ^7", "^1FIRE ^7", "^6LIGHTNING ^7", "^3FREEDOM ^7");
+    level.segment_names = array("^2NML ^7", "^5BOXES ^7", "^4ICE ^7", "^3WIND ^7", "^1FIRE ^7", "^6LIGHTNING ^7", "^3FREEDOM ^7");
     level.segment_clock_start = clock_start;
     // Without clock_start the clock is already running. Tracked here, not by whether
     // the live row exists: that row is destroyed at the end, and a second clock start
@@ -708,6 +708,14 @@ shared_segment_timer(start_split, clock_start)
         case SPLIT_NML:
             flag_wait("activate_zone_nml");
             shared_segment_split(SPLIT_NML);
+        case SPLIT_BOXES:
+            waittillframeend;
+            while(level._challenges.s_team.n_completed < 1)
+            {
+                wait 0.05;
+                waittillframeend;
+            }
+            shared_segment_split(SPLIT_BOXES);
         case SPLIT_ICE:
             while(level.n_staffs_crafted < 1) wait 0.05;
             shared_segment_split(SPLIT_ICE);
