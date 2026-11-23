@@ -1057,7 +1057,7 @@ basegame_update_zone_hud()
     zone = basegame_plain_zone_name(zone); // Same names as the Active Zones HUD.
     if(!isdefined(self.practice_zone_text) || self.practice_zone_text != zone)
     {
-        self.practice_zone_hud setTextUnlimited("zone: " + zone);
+        self.practice_zone_hud setTextUnlimited("Zone: " + zone);
         self.practice_zone_text = zone;
     }
 }

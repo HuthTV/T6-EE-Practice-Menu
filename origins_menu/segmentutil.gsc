@@ -2735,7 +2735,7 @@ shared_part(key)
 			break;
 		case "vinyl_ice":
 			part.label = "Ice";
-			part.locations = array("relay", "mystery box", "table");
+			part.locations = array("relay", "Mystery Box", "table");
 			break;
 		case "vinyl_air":
 			part.label = "Wind";
@@ -2959,7 +2959,7 @@ shared_segment_all_random_cycles()
 // A mode adds one entry per way its clock can start, in its initialize
 // function, BEFORE its cfg is loaded:
 //
-//     shared_start_time_add("craft", "craft", "Craft", "12:30", "14:30", 5, "13:30");
+//     shared_start_time_add("craft", "craft", "craft", "12:30", "14:30", 5, "13:30");
 //
 // Read it as: "entry craft, starts on the staff craft, shown as Craft, presets
 // from 12:30 to 14:30 every 5 seconds, 13:30 by default". Custom runs from the

@@ -307,11 +307,11 @@ shared_build_parts_menu(parent)
 	parts = add_submenu(parent, "parts", "Part Locations", "Parts");
 		self shared_add_part_choice(parts, "maxis_body");
 		self shared_add_part_choice(parts, "maxis_engine");
-		create_option(parts, "Maxis Brain", ::shared_maxis_brain);
+		create_option(parts, "Brain", ::shared_maxis_brain);
 		self shared_add_part_choice(parts, "shield_gen2");
 		self shared_add_part_choice(parts, "shield_gen3");
 		self shared_add_part_choice(parts, "shield_nml");
-		create_option(parts, "All random", ::shared_reset_locations, shared_part_keys());
+		create_option(parts, "All Random", ::shared_reset_locations, shared_part_keys());
 }
 
 // Where each gramophone vinyl spawns.
@@ -474,7 +474,7 @@ shared_mechz_stage_logic()
     maps\mp\zombies\_zm_sidequests::stage_completed( "little_girl_lost", level._cur_stage_name );
 }
 
-// all_random_cycles is the "All random" action for Robot Cycles; Full Game's
+// all_random_cycles is the "All Random" action for Robot Cycles; Full Game's
 // also randomizes Rain fire, the segment starts' keeps it. Cycles before
 // first_cycle cannot happen in the mode and get no rows.
 shared_build_robot_menus(parent, all_random_cycles, first_cycle = 1, show_rain_robot = true)
@@ -483,13 +483,13 @@ shared_build_robot_menus(parent, all_random_cycles, first_cycle = 1, show_rain_r
 		if(show_rain_robot) create_option(cycles, "Rain Fire: ^3" + level.robot[get_cfg_int("rain_robot")], ::cfg_increment_int, "rain_robot", array(ROBOT_RANDOM, ROBOT_FREYA));
 		for(cycle = first_cycle; cycle <= ROBOT_CYCLE_COUNT; cycle++)
 			create_option(cycles, "Cycle " + cycle + ": ^3" + level.robot[get_cfg_int("cycle_" + cycle)], ::cfg_increment_int, "cycle_" + cycle, array(ROBOT_RANDOM, ROBOT_FREYA));
-		create_option(cycles, "All random", all_random_cycles);
+		create_option(cycles, "All Random", all_random_cycles);
 
 	feet = add_submenu(parent, "feet", "Robot Feet", "Feet");
 		create_option(feet, "Rain Foot: ^3" + rain_foot_text(), ::cfg_increment_int, "rain_foot", array(FOOT_RANDOM, FOOT_RIGHT));
 		for(cycle = first_cycle; cycle <= ROBOT_CYCLE_COUNT; cycle++)
 			create_option(feet, "Cycle " + cycle + ": ^3" + level.foot[get_cfg_int("foot_" + cycle)], ::cfg_increment_int, "foot_" + cycle, array(FOOT_RANDOM, FOOT_RIGHT));
-		create_option(feet, "All random", ::shared_all_random_feet);
+		create_option(feet, "All Random", ::shared_all_random_feet);
 }
 
 rain_foot_text()

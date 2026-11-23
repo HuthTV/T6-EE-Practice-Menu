@@ -89,7 +89,7 @@ puzzle_rng_build_menus(parent)
                 create_option(ice, label + ": ^3" + puzzle_rng_ice_text(tile), ::puzzle_rng_ice_step, tile);
             }
             create_option(ice, "Optimal (1 6 5 4 3 2)", ::puzzle_rng_ice_optimal);
-            create_option(ice, "All random", ::puzzle_rng_ice_random);
+            create_option(ice, "All Random", ::puzzle_rng_ice_random);
     }
     if(puzzle_rng_shows("wind"))
     {
@@ -102,7 +102,7 @@ puzzle_rng_build_menus(parent)
                 add_cfg_choice(wind, labels[ring - 1], "wind_ring_" + ring, names);
             wind_keys = array("wind_ring_1", "wind_ring_2", "wind_ring_3", "wind_ring_4");
             create_option(wind, "Optimal (1 1 1 1)", ::puzzle_rng_set_keys, wind_keys, 1);
-            create_option(wind, "All random", ::puzzle_rng_set_keys, wind_keys, 0);
+            create_option(wind, "All Random", ::puzzle_rng_set_keys, wind_keys, 0);
     }
     if(puzzle_rng_has("fire") && isDefined(level.puzzle_fire_sizes))
     {
@@ -133,7 +133,7 @@ puzzle_rng_build_menus(parent)
                 keys[keys.size] = "fire_torch_" + group;
             }
             create_option(fire, "Optimal (7 5 3)", ::puzzle_rng_fire_set_optimal);
-            create_option(fire, "All random", ::puzzle_rng_set_keys, keys, 0);
+            create_option(fire, "All Random", ::puzzle_rng_set_keys, keys, 0);
     }
     if(puzzle_rng_has("chamber"))
     {
@@ -151,7 +151,7 @@ puzzle_rng_build_menus(parent)
                 wall_keys[wall_keys.size] = "chamber_v" + visit + "_a";
                 wall_keys[wall_keys.size] = "chamber_v" + visit + "_b";
             }
-            create_option(walls, "All random", ::puzzle_rng_set_keys, wall_keys, 0);
+            create_option(walls, "All Random", ::puzzle_rng_set_keys, wall_keys, 0);
     }
 }
 

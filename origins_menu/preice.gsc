@@ -37,7 +37,7 @@ preice_initialize()
 {
     // Start Times on the Ice craft, every 5 seconds. Floor and mule share one, STG
     // has its own, the same for now.
-    shared_start_time_add("craft", "craft", "Craft", ICE_CRAFT_MIN, ICE_CRAFT_MAX, 5, ICE_CRAFT_DEFAULT);
+    shared_start_time_add("craft", "craft", "craft", ICE_CRAFT_MIN, ICE_CRAFT_MAX, 5, ICE_CRAFT_DEFAULT);
     puzzle_rng_install(PUZZLE_RNG_ICE);
     level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();
     mode_cfg_load("preice", preice_default_cfg());
@@ -209,11 +209,11 @@ preice_auto_round_end()
 preice_build_menu(root)
 {
     settings = add_submenu(root, "mapsettings", level.mode.label + " Settings", level.mode.label);
-        shared_add_location_choice(settings, "start_loc", array(PREICE_LOC_FLOOR, PREICE_LOC_MULE, PREICE_LOC_STG), array("floor", "mule", "STG"));
+        shared_add_location_choice(settings, "start_loc", array(PREICE_LOC_FLOOR, PREICE_LOC_MULE, PREICE_LOC_STG), array("floor", "Mule", "STG"));
         self shared_start_time_menu(settings);
         add_cfg_toggle(settings, "R2L Route", "r2l");
         // Cycle 1 Foot picks the second bunker door: only R2L has a choice.
-        if(get_cfg_int("r2l")) add_cfg_choice(settings, "Cycle 1 Foot", "trench_path", array("random", "gen 2", "gen 3"));
+        if(get_cfg_int("r2l")) add_cfg_choice(settings, "Cycle 1 Foot", "trench_path", array("random", "Gen 2", "Gen 3"));
         add_cfg_toggle(settings, "Gram", "early_gram", "^2in hand", "^3placed");
         add_cfg_toggle(settings, "Auto Round End", "auto_round_end");
         if(get_cfg_int("auto_round_end")) create_option(settings, "Auto End Delay: ^3" + get_cfg_int("auto_round_end_delay") + "s", ::cfg_increment_int, "auto_round_end_delay", array(1, 10));

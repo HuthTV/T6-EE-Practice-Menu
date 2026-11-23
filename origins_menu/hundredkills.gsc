@@ -44,7 +44,7 @@ hundredkills_initialize()
     // Start time presets: 31:00 to 35:00, every 5 seconds, 33:00 by default. A
     // guess at the run clock when the kills start (Ending prac guesses 29:00 for
     // the fire link): set it to the real one.
-    shared_start_time_add("release", "release", "Release", "31:00", "35:00", 5, "33:00");
+    shared_start_time_add("release", "release", "release", "31:00", "35:00", 5, "33:00");
     puzzle_rng_install(PUZZLE_RNG_CHAMBER);
     level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();
     mode_cfg_load("hundredkills", hundredkills_default_cfg());

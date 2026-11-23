@@ -24,7 +24,7 @@ postlightning_initialize()
 {
     // Start Time in the Lightning portal's teleport, every 5 seconds: the Lightning
     // craft's until the real one is known (user, 2026-11-05).
-    shared_start_time_add("piano", "portal", "Portal", LIGHTNING_CRAFT_MIN, LIGHTNING_CRAFT_MAX, 5, LIGHTNING_CRAFT_DEFAULT);
+    shared_start_time_add("piano", "portal", "portal", LIGHTNING_CRAFT_MIN, LIGHTNING_CRAFT_MAX, 5, LIGHTNING_CRAFT_DEFAULT);
     puzzle_rng_install(PUZZLE_RNG_CHAMBER);
     level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();
     mode_cfg_load("postlightning", postlightning_default_cfg());

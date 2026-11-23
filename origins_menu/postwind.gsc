@@ -34,8 +34,8 @@ postwind_initialize()
     // Start Times, every 5 seconds: the Wind craft's until the real ones are known
     // (user, 2026-11-05). Mound starts at the spawn (release), portal enter in the
     // Wind portal's teleport (user, 2026-11-02).
-    shared_start_time_add("bulbs_mound", "release", "Spawn", WIND_CRAFT_MIN, WIND_CRAFT_MAX, 5, WIND_CRAFT_DEFAULT);
-    shared_start_time_add("bulbs_enter", "portal", "Portal", WIND_CRAFT_MIN, WIND_CRAFT_MAX, 5, WIND_CRAFT_DEFAULT);
+    shared_start_time_add("bulbs_mound", "release", "spawn", WIND_CRAFT_MIN, WIND_CRAFT_MAX, 5, WIND_CRAFT_DEFAULT);
+    shared_start_time_add("bulbs_enter", "portal", "portal", WIND_CRAFT_MIN, WIND_CRAFT_MAX, 5, WIND_CRAFT_DEFAULT);
     level.start_time_choices = ::postwind_start_time_choices;
     puzzle_rng_install(PUZZLE_RNG_WIND);
     level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();

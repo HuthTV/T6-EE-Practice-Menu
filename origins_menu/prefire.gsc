@@ -30,8 +30,8 @@ prefire_initialize()
 {
     // Start Time on the Fire craft, every 5 seconds. STG has its own, the same for
     // now.
-    shared_start_time_add("craft", "craft", "Craft", FIRE_CRAFT_MIN, FIRE_CRAFT_MAX, 5, FIRE_CRAFT_DEFAULT);
-    shared_start_time_add("stg", "craft", "Craft", FIRE_CRAFT_MIN, FIRE_CRAFT_MAX, 5, FIRE_CRAFT_DEFAULT);
+    shared_start_time_add("craft", "craft", "craft", FIRE_CRAFT_MIN, FIRE_CRAFT_MAX, 5, FIRE_CRAFT_DEFAULT);
+    shared_start_time_add("stg", "craft", "craft", FIRE_CRAFT_MIN, FIRE_CRAFT_MAX, 5, FIRE_CRAFT_DEFAULT);
     level.start_time_choices = ::prefire_start_time_choices;
     puzzle_rng_install(PUZZLE_RNG_FIRE);
     level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();

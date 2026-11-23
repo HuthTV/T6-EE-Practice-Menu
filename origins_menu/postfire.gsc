@@ -31,8 +31,8 @@ postfire_initialize()
     // Fire kills enter in the Lightning portal's teleport, torches on leaving the
     // Crazy Place, every 5 seconds: the Fire craft's until the real ones are known
     // (user, 2026-11-05).
-    shared_start_time_add("kills", "portal", "Portal", FIRE_CRAFT_MIN, FIRE_CRAFT_MAX, 5, FIRE_CRAFT_DEFAULT);
-    shared_start_time_add("torches", "exit", "Exit", FIRE_CRAFT_MIN, FIRE_CRAFT_MAX, 5, FIRE_CRAFT_DEFAULT);
+    shared_start_time_add("kills", "portal", "portal", FIRE_CRAFT_MIN, FIRE_CRAFT_MAX, 5, FIRE_CRAFT_DEFAULT);
+    shared_start_time_add("torches", "exit", "exit", FIRE_CRAFT_MIN, FIRE_CRAFT_MAX, 5, FIRE_CRAFT_DEFAULT);
     level.start_time_choices = ::postfire_start_time_choices;
     puzzle_rng_install(PUZZLE_RNG_FIRE);
     level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();

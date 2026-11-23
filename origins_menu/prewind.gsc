@@ -36,9 +36,9 @@ prewind_initialize()
 {
     // Start Times, every 5 seconds: the Wind craft's. Exit, on leaving the Crazy
     // Place, has it too until its real time is known (user, 2026-11-05).
-    shared_start_time_add("craft", "craft", "Craft", WIND_CRAFT_MIN, WIND_CRAFT_MAX, 5, WIND_CRAFT_DEFAULT);
-    shared_start_time_add("stg", "craft", "Craft", WIND_CRAFT_MIN, WIND_CRAFT_MAX, 5, WIND_CRAFT_DEFAULT);
-    shared_start_time_add("exit", "exit", "Exit", WIND_CRAFT_MIN, WIND_CRAFT_MAX, 5, WIND_CRAFT_DEFAULT);
+    shared_start_time_add("craft", "craft", "craft", WIND_CRAFT_MIN, WIND_CRAFT_MAX, 5, WIND_CRAFT_DEFAULT);
+    shared_start_time_add("stg", "craft", "craft", WIND_CRAFT_MIN, WIND_CRAFT_MAX, 5, WIND_CRAFT_DEFAULT);
+    shared_start_time_add("exit", "exit", "exit", WIND_CRAFT_MIN, WIND_CRAFT_MAX, 5, WIND_CRAFT_DEFAULT);
     level.start_time_choices = ::prewind_start_time_choices;
     puzzle_rng_install(PUZZLE_RNG_WIND);
     level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();

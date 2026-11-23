@@ -63,9 +63,9 @@ main()
 	if(!shared_map_active()) return;
 	// Robot and foot names for the menus.
 	level.robot[ROBOT_RANDOM] = "random";
-	level.robot[ROBOT_ODIN] = "odin";
-	level.robot[ROBOT_THOR] = "thor";
-	level.robot[ROBOT_FREYA] = "freya";
+	level.robot[ROBOT_ODIN] = "Odin";
+	level.robot[ROBOT_THOR] = "Thor";
+	level.robot[ROBOT_FREYA] = "Freya";
 	level.foot[FOOT_RANDOM] = "random";
 	level.foot[FOOT_LEFT] = "left";
 	level.foot[FOOT_RIGHT] = "right";

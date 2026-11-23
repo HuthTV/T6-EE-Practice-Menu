@@ -31,8 +31,8 @@ prelightning_initialize()
 {
     // Start Time on the Lightning craft, every 5 seconds. STG has its own, the same
     // for now.
-    shared_start_time_add("craft", "craft", "Craft", LIGHTNING_CRAFT_MIN, LIGHTNING_CRAFT_MAX, 5, LIGHTNING_CRAFT_DEFAULT);
-    shared_start_time_add("stg", "craft", "Craft", LIGHTNING_CRAFT_MIN, LIGHTNING_CRAFT_MAX, 5, LIGHTNING_CRAFT_DEFAULT);
+    shared_start_time_add("craft", "craft", "craft", LIGHTNING_CRAFT_MIN, LIGHTNING_CRAFT_MAX, 5, LIGHTNING_CRAFT_DEFAULT);
+    shared_start_time_add("stg", "craft", "craft", LIGHTNING_CRAFT_MIN, LIGHTNING_CRAFT_MAX, 5, LIGHTNING_CRAFT_DEFAULT);
     level.start_time_choices = ::prelightning_start_time_choices;
     puzzle_rng_install(PUZZLE_RNG_CHAMBER);
     level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();

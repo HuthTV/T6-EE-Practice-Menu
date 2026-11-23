@@ -39,8 +39,8 @@ postice_initialize()
 {
     // Start Times, in the portal, every 5 seconds: the Ice craft's until the real
     // ones are known (user, 2026-11-05).
-    shared_start_time_add("code_enter", "portal", "Portal", ICE_CRAFT_MIN, ICE_CRAFT_MAX, 5, ICE_CRAFT_DEFAULT);
-    shared_start_time_add("code_exit", "portal", "Portal", ICE_CRAFT_MIN, ICE_CRAFT_MAX, 5, ICE_CRAFT_DEFAULT);
+    shared_start_time_add("code_enter", "portal", "portal", ICE_CRAFT_MIN, ICE_CRAFT_MAX, 5, ICE_CRAFT_DEFAULT);
+    shared_start_time_add("code_exit", "portal", "portal", ICE_CRAFT_MIN, ICE_CRAFT_MAX, 5, ICE_CRAFT_DEFAULT);
     level.start_time_choices = ::postice_start_time_choices;
     puzzle_rng_install(PUZZLE_RNG_ICE);
     level.puzzle_rng_visit_labels = puzzle_rng_route_visit_labels();

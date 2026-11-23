@@ -108,7 +108,7 @@ mob_build_root_menus(root)
 	teleport = add_submenu(root, "teleport", "Teleport");
 		add_cfg_toggle(teleport, "Return Key [{+actionslot 3}]", "tp_return");
 		foreach(name in level.mob_teleport_names)
-			create_option(teleport, name, ::mob_teleport, name);
+			create_option(teleport, mob_teleport_label(name), ::mob_teleport, name);
 
 	afterlife = add_submenu(root, "afterlife", "Afterlife");
 		add_cfg_toggle(afterlife, "Infinite Afterlives", "infinite_afterlives");
@@ -170,6 +170,21 @@ mob_teleports_init()
     level.mob_teleports["wolf3"] = (883, 9664, 1545);
 }
 
+// The row for a teleport name (also the chat word): "wolf1" reads "Wolf 1".
+mob_teleport_label(name)
+{
+    // No toupper in T6 GSC: look the first letter up.
+    lower = "abcdefghijklmnopqrstuvwxyz";
+    upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    first = getsubstr(name, 0, 1);
+    for(i = 0; i < lower.size; i++)
+        if(getsubstr(lower, i, i + 1) == first) first = getsubstr(upper, i, i + 1);
+    label = first + getsubstr(name, 1, name.size);
+    last = getsubstr(label, label.size - 1, label.size);
+    if(int(last) > 0) label = getsubstr(label, 0, label.size - 1) + " " + last;
+    return label;
+}
+
 // Teleports only into an active zone, so the player cannot land out of the map.
 mob_teleport(name)
 {
@@ -182,7 +197,7 @@ mob_teleport(name)
     self setorigin(origin);
     self.mob_last_teleport = origin;
     if(get_cfg_int("tp_return"))
-        self iprintln("Press ^3[{+actionslot 3}]^7 to return to " + name);
+        self iprintln("Press ^3[{+actionslot 3}]^7 to return to " + mob_teleport_label(name));
 }
 
 // [{+actionslot 3}] with the menu closed returns to the last teleport. The old
